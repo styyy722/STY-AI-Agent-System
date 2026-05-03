@@ -1,0 +1,35 @@
+{
+  "name": "sty-ai-agent-system",
+  "version": "0.1.0",
+  "description": "A Claude-powered AI business agent for finance, data analytics, and reporting workflows.",
+  "type": "module",
+  "bin": {
+    "sty-agent": "./dist/cli.js"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "test": "echo \"No tests yet\""
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "latest",
+    "commander": "latest",
+    "dotenv": "latest",
+    "zod": "latest"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "tsx": "latest"
+  },
+  "keywords": [
+    "ai-agent",
+    "claude",
+    "finance",
+    "data-analytics",
+    "business-automation",
+    "terminal-agent"
+  ],
+  "author": "",
+  "license": "MIT"
+}
