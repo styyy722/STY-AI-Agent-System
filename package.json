@@ -13,15 +13,14 @@
     "test": "echo \"No tests yet\""
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "latest",
-    "commander": "latest",
-    "dotenv": "latest",
-    "zod": "latest"
+    "@anthropic-ai/sdk": "^0.92.0",
+    "commander": "^14.0.3",
+    "dotenv": "^17.4.2"
   },
   "devDependencies": {
-    "@types/node": "latest",
-    "typescript": "latest",
-    "tsx": "latest"
+    "@types/node": "^25.6.0",
+    "typescript": "^6.0.3",
+    "tsx": "^4.21.0"
   },
   "engines": {
     "node": ">=20"
