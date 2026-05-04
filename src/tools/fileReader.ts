@@ -13,17 +13,17 @@ export interface FileContext {
 const SUPPORTED_EXTENSIONS = [".txt", ".md", ".csv", ".json", ".xlsx", ".pdf"];
 const MAX_FILE_CHARACTERS = 40000; // raised from 20k to accommodate richer file types
 
-// Resolve the scripts directory relative to this file's location
+// Resolve the script directory relative to this file's location
 function getScriptPath(scriptName: string): string {
   // Works both in dev (src/) and built (dist/) layouts
   const candidates = [
-    path.join(process.cwd(), "scripts", scriptName),
-    path.join(path.dirname(process.argv[1]), "..", "scripts", scriptName)
+    path.join(process.cwd(), "script", scriptName),
+    path.join(path.dirname(process.argv[1]), "..", "script", scriptName)
   ];
   for (const p of candidates) {
     if (fs.existsSync(p)) return p;
   }
-  return path.join(process.cwd(), "scripts", scriptName);
+  return path.join(process.cwd(), "script", scriptName);
 }
 
 function readTextFile(absolutePath: string): string {
