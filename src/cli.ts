@@ -3,11 +3,16 @@
 import { Command } from "commander";
 import { runCoreAgent, type AgentMode } from "./agent/coreAgent.js";
 import { readBusinessFile, buildFilePrompt } from "./tools/fileReader.js";
+import {
+  saveAgentOutput,
+  formatSavedOutputContent
+} from "./tools/outputWriter.js";
 
 const program = new Command();
 
 interface CommandOptions {
   file?: string;
+  output?: string;
 }
 
 async function handleAgentCommand(
@@ -57,6 +62,27 @@ ${filePrompt}
     });
   }
 
+  if (options.output) {
+    try {
+      const savedContent = formatSavedOutputContent(
+        response.title,
+        response.summary,
+        response.nextSteps
+      );
+
+      const savedFile = saveAgentOutput(options.output, savedContent);
+
+      console.log("");
+      console.log(`Output saved to: ${savedFile.outputPath}`);
+    } catch (error) {
+      console.error("");
+      console.error("Output save error:");
+      console.error(error instanceof Error ? error.message : "Unknown output error");
+      console.error("");
+      process.exit(1);
+    }
+  }
+
   console.log("");
 }
 
@@ -77,6 +103,7 @@ program
   .description("Ask the general business agent a question")
   .argument("<request>", "Your business request")
   .option("-f, --file <path>", "Attach a local file")
+  .option("-o, --output <path>", "Save the agent response to a file")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("general", request, options);
   });
@@ -86,6 +113,7 @@ program
   .description("Run finance-related AI workflows")
   .argument("<request>", "Your finance request")
   .option("-f, --file <path>", "Attach a local file")
+  .option("-o, --output <path>", "Save the agent response to a file")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("finance", request, options);
   });
@@ -95,6 +123,7 @@ program
   .description("Run data analytics AI workflows")
   .argument("<request>", "Your data analytics request")
   .option("-f, --file <path>", "Attach a local file")
+  .option("-o, --output <path>", "Save the agent response to a file")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("data", request, options);
   });
@@ -104,6 +133,7 @@ program
   .description("Generate business reports and executive summaries")
   .argument("<request>", "Your reporting request")
   .option("-f, --file <path>", "Attach a local file")
+  .option("-o, --output <path>", "Save the agent response to a file")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("report", request, options);
   });
