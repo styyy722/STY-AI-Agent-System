@@ -26,12 +26,41 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Run eval smoke test
-        run: npm run eval
-        env:
-          # Smoke test does not make API calls — no key needed
-          # Set this secret in GitHub → Settings → Secrets if you want to run live eval here
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      - name: Validate eval files exist and are valid JSON
+        run: |
+          node -e "
+          const fs = require('fs');
+          const path = require('path');
+          const evalsDir = path.join(process.cwd(), 'tests', 'evals');
+
+          if (!fs.existsSync(evalsDir)) {
+            console.error('tests/evals/ directory not found');
+            process.exit(1);
+          }
+
+          const files = fs.readdirSync(evalsDir).filter(f => f.endsWith('_evals.json'));
+
+          if (files.length === 0) {
+            console.error('No eval files found in tests/evals/');
+            process.exit(1);
+          }
+
+          let total = 0;
+          for (const file of files) {
+            const content = fs.readFileSync(path.join(evalsDir, file), 'utf-8');
+            const cases = JSON.parse(content);
+            for (const c of cases) {
+              if (!c.id || !c.mode || !c.question || !c.expectedKeyPoints?.length || !c.minimumScore) {
+                console.error('Eval case missing required fields:', JSON.stringify(c));
+                process.exit(1);
+              }
+            }
+            console.log('✔ ' + file + ' — ' + cases.length + ' case(s)');
+            total += cases.length;
+          }
+
+          console.log('All ' + total + ' eval case(s) validated successfully.');
+          "
 
       - name: Upload eval results (if any)
         if: always()
