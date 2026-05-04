@@ -5,6 +5,7 @@ import {
   appendToSession
 } from "../tools/sessionMemory.js";
 import { writeLog, buildLogEntry } from "../tools/logger.js";
+import { scoreOutput, formatConfidenceBlock, type ConfidenceResult } from "../tools/confidenceScorer.js";
 
 export type AgentMode = "general" | "finance" | "data" | "report";
 
@@ -20,6 +21,8 @@ export interface AgentResponse {
   summary: string;
   nextSteps: string[];
   sessionId?: string;
+  confidence?: ConfidenceResult;
+  confidenceBlock?: string;
 }
 
 export function buildSystemPrompt(mode: AgentMode): string {
@@ -181,6 +184,14 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       );
     }
 
+    // Score output confidence
+    const confidence = await scoreOutput({
+      mode: request.mode,
+      userInput: request.userInput,
+      agentOutput: claudeResponse.text
+    });
+    const confidenceBlock = formatConfidenceBlock(confidence);
+
     // Write success log
     writeLog(buildLogEntry({
       mode: request.mode,
@@ -190,7 +201,10 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       output: claudeResponse.text,
       skillsMatched: matchedSkills,
       status: "success",
-      startTime
+      startTime,
+      confidenceTier: confidence.tier,
+      confidenceScore: confidence.score,
+      confidenceFlags: confidence.flags
     }));
 
     return {
@@ -198,7 +212,9 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       title: buildTitle(request.mode),
       summary: claudeResponse.text,
       nextSteps: buildNextSteps(request.mode),
-      sessionId: request.sessionId
+      sessionId: request.sessionId,
+      confidence,
+      confidenceBlock
     };
 
   } catch (error) {
