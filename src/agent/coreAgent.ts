@@ -1,9 +1,10 @@
 import { callClaude } from "../llm/claudeClient.js";
-import { buildSkillContext } from "../skills/skillRegistry.js";
+import { buildSkillContext, findRelevantSkills } from "../skills/skillRegistry.js";
 import {
   getSessionHistory,
   appendToSession
 } from "../tools/sessionMemory.js";
+import { writeLog, buildLogEntry } from "../tools/logger.js";
 
 export type AgentMode = "general" | "finance" | "data" | "report";
 
@@ -108,17 +109,17 @@ function buildNextSteps(mode: AgentMode): string[] {
     finance: [
       "Check whether all finance assumptions are available.",
       "Provide company data, market data, or financial statements for deeper analysis.",
-      "Use specialist skill modules for WACC, stock analysis, and portfolio workflows."
+      "Use --file to attach Excel or PDF financial documents for richer analysis."
     ],
     data: [
-      "Provide a dataset file later so the agent can perform real analysis.",
-      "Add CSV and Excel reading support in the next development stage.",
-      "Create reusable analytics templates for EDA, modelling, and dashboards."
+      "Use --file to attach a CSV, Excel, or JSON dataset for real analysis.",
+      "Use --session to continue this analysis across multiple commands.",
+      "Use report mode to turn findings into a stakeholder-ready summary."
     ],
     report: [
       "Review whether the output is suitable for the target audience.",
       "Provide the preferred tone, format, and stakeholder type for a sharper report.",
-      "Add reporting templates later for executive summaries, board papers, and slide content."
+      "Use --output to save the report to a file for sharing or archiving."
     ]
   };
 
@@ -136,44 +137,86 @@ function getMaxTokens(mode: AgentMode): number {
   return MODE_MAX_TOKENS[mode];
 }
 
+function getModelName(usePremium: boolean): string {
+  if (usePremium) {
+    return process.env.ANTHROPIC_MODEL_PREMIUM || "claude-opus-4-7";
+  }
+  return process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+}
+
 export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse> {
+  const startTime = Date.now();
   const baseSystemPrompt = buildSystemPrompt(request.mode);
   const skillContext = buildSkillContext(request.userInput);
+  const matchedSkills = findRelevantSkills(request.userInput).map(s => s.name);
 
   const finalSystemPrompt = skillContext
     ? `${baseSystemPrompt}\n\n${skillContext}`
     : baseSystemPrompt;
 
   const usePremiumModel = request.mode === "report";
+  const modelName = getModelName(usePremiumModel);
 
   // Load history if a session ID was provided
   const history = request.sessionId
     ? getSessionHistory(request.sessionId)
     : [];
 
-  const claudeResponse = await callClaude({
-    systemPrompt: finalSystemPrompt,
-    userInput: request.userInput,
-    usePremiumModel,
-    maxTokens: getMaxTokens(request.mode),
-    history
-  });
+  try {
+    const claudeResponse = await callClaude({
+      systemPrompt: finalSystemPrompt,
+      userInput: request.userInput,
+      usePremiumModel,
+      maxTokens: getMaxTokens(request.mode),
+      history
+    });
 
-  // Persist this exchange to the session
-  if (request.sessionId) {
-    appendToSession(
-      request.sessionId,
-      request.mode,
-      request.userInput,
-      claudeResponse.text
-    );
+    // Persist exchange to session
+    if (request.sessionId) {
+      appendToSession(
+        request.sessionId,
+        request.mode,
+        request.userInput,
+        claudeResponse.text
+      );
+    }
+
+    // Write success log
+    writeLog(buildLogEntry({
+      mode: request.mode,
+      sessionId: request.sessionId,
+      model: modelName,
+      userInput: request.userInput,
+      output: claudeResponse.text,
+      skillsMatched: matchedSkills,
+      status: "success",
+      startTime
+    }));
+
+    return {
+      mode: request.mode,
+      title: buildTitle(request.mode),
+      summary: claudeResponse.text,
+      nextSteps: buildNextSteps(request.mode),
+      sessionId: request.sessionId
+    };
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+
+    // Write error log before re-throwing
+    writeLog(buildLogEntry({
+      mode: request.mode,
+      sessionId: request.sessionId,
+      model: modelName,
+      userInput: request.userInput,
+      output: "",
+      skillsMatched: matchedSkills,
+      status: "error",
+      errorMessage,
+      startTime
+    }));
+
+    throw error;
   }
-
-  return {
-    mode: request.mode,
-    title: buildTitle(request.mode),
-    summary: claudeResponse.text,
-    nextSteps: buildNextSteps(request.mode),
-    sessionId: request.sessionId
-  };
 }
