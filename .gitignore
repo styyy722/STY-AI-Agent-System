@@ -147,3 +147,5 @@ logs/
 review_queue/
 usage/
 access_policy.json
+sessions.db
+*.db
