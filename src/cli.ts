@@ -190,9 +190,70 @@ program
 
 program
   .command("hello")
-  .description("Test whether the agent is working")
-  .action(() => {
-    console.log("Hello! STY AI Agent System is working.");
+  .description("Verify the agent is correctly set up and the API key works")
+  .action(async () => {
+    console.log("");
+    console.log("STY AI Agent System — Setup Check");
+    console.log("====================================");
+    console.log("");
+
+    let allPassed = true;
+
+    // Check 1: .env file
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const envPath = path.join(process.cwd(), ".env");
+    const envExists = fs.existsSync(envPath);
+    console.log(envExists ? "✔ .env file found" : "✖ .env file not found — copy .env.example to .env");
+    if (!envExists) allPassed = false;
+
+    // Check 2: API key present
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    const keyPresent = !!apiKey && apiKey !== "your_api_key_here";
+    console.log(keyPresent ? "✔ ANTHROPIC_API_KEY is set" : "✖ ANTHROPIC_API_KEY is missing or still set to placeholder");
+    if (!keyPresent) allPassed = false;
+
+    // Check 3: API key works (live call)
+    if (keyPresent) {
+      const spinner = ora("Testing API connection...").start();
+      try {
+        const { callClaude } = await import("./llm/claudeClient.js");
+        await callClaude({
+          systemPrompt: "You are a test assistant. Reply with exactly: OK",
+          userInput: "Reply with OK",
+          maxTokens: 10
+        });
+        spinner.succeed("API connection successful");
+      } catch (error) {
+        spinner.fail("API connection failed");
+        console.log("  " + (error instanceof Error ? error.message : String(error)));
+        allPassed = false;
+      }
+    } else {
+      console.log("  Skipping API test — fix the key first");
+    }
+
+    // Check 4: Skills loading
+    const { getAvailableSkills: getSkills } = await import("./skills/skillRegistry.js");
+    const skills = getSkills();
+    console.log(
+      skills.length > 0
+        ? `✔ ${skills.length} skills loaded`
+        : "✖ No skills found — check that finance_skills/, data_skills/, and report_skills/ exist"
+    );
+    if (skills.length === 0) allPassed = false;
+
+    // Summary
+    console.log("");
+    if (allPassed) {
+      console.log("All checks passed. Your agent is ready to use.");
+      console.log("");
+      console.log("Try: sty-agent finance "Explain WACC"");
+    } else {
+      console.log("Some checks failed. Fix the issues above before using the agent.");
+      process.exit(1);
+    }
+    console.log("");
   });
 
 program
