@@ -2,27 +2,17 @@ import Anthropic from "@anthropic-ai/sdk";
 import "dotenv/config";
 import type { ConversationMessage } from "../tools/sessionMemory.js";
 import { checkBudget } from "../tools/costTracker.js";
+import type { LLMRequest, LLMResponse } from "./llmInterface.js";
 
-export interface ClaudeRequest {
-  systemPrompt: string;
-  userInput: string;
-  usePremiumModel?: boolean;
-  maxTokens?: number;
-  history?: ConversationMessage[];
-}
-
-export interface ClaudeResponse {
-  text: string;
-}
+export interface ClaudeRequest extends LLMRequest {}
+export interface ClaudeResponse extends LLMResponse {}
 
 // Typed error classes so cli.ts can handle each case differently
 export class BudgetExceededError extends Error {
   constructor(spentUSD: number, budgetUSD: number) {
     super(
-      `Daily budget exceeded. Spent: $${spentUSD.toFixed(4)} / Limit: $${budgetUSD.toFixed(2)}.
-` +
-      `  Update DAILY_BUDGET_USD in .env to raise the limit, or wait until tomorrow.
-` +
+      `Daily budget exceeded. Spent: $${spentUSD.toFixed(4)} / Limit: $${budgetUSD.toFixed(2)}.\n` +
+      `  Update DAILY_BUDGET_USD in .env to raise the limit, or wait until tomorrow.\n` +
       `  Run: sty-agent usage to see full spend breakdown.`
     );
     this.name = "BudgetExceededError";
@@ -66,7 +56,7 @@ const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY
 });
 
-export async function callClaude(request: ClaudeRequest): Promise<ClaudeResponse> {
+export async function callClaude(request: LLMRequest): Promise<LLMResponse> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new MissingApiKeyError();
   }
@@ -84,22 +74,40 @@ export async function callClaude(request: ClaudeRequest): Promise<ClaudeResponse
   const outputFormat = process.env.OUTPUT_FORMAT || "markdown";
   const enrichedSystemPrompt = `${request.systemPrompt}\n\nResponse style: ${agentStyle}.\nOutput format: ${outputFormat}.`;
 
-  // Build message list: prior history + current user message
+  // Build the last user message — plain string or content array if images are attached
+  let lastUserContent: string | Anthropic.ContentBlockParam[];
+
+  if (request.images && request.images.length > 0) {
+    const blocks: Anthropic.ContentBlockParam[] = [];
+
+    for (const img of request.images) {
+      blocks.push({
+        type: "image",
+        source: {
+          type: "base64",
+          media_type: img.mediaType,
+          data: img.base64
+        }
+      });
+    }
+
+    blocks.push({ type: "text", text: request.userInput });
+    lastUserContent = blocks;
+  } else {
+    lastUserContent = request.userInput;
+  }
+
   const messages: Anthropic.MessageParam[] = [
     ...(request.history ?? []).map((m) => ({
       role: m.role as "user" | "assistant",
       content: m.content
     })),
-    { role: "user", content: request.userInput }
+    { role: "user", content: lastUserContent }
   ];
 
-  // Extended thinking — enabled when THINKING_BUDGET_TOKENS is set in .env
-  // Minimum 1024, recommended 10000+ for complex corporate tasks
-  // Note: thinking requires max_tokens > budget_tokens
   const thinkingBudget = parseInt(process.env.THINKING_BUDGET_TOKENS || "0");
   const useThinking = thinkingBudget >= 1024;
   const maxTokens = request.maxTokens ?? parseInt(process.env.MAX_TOKENS || "0") || 4000;
-  // When thinking is enabled, max_tokens must cover both thinking and output
   const effectiveMaxTokens = useThinking
     ? Math.max(maxTokens, thinkingBudget + 2000)
     : maxTokens;
@@ -112,8 +120,6 @@ export async function callClaude(request: ClaudeRequest): Promise<ClaudeResponse
   };
 
   if (useThinking) {
-    // claude-opus-4-7 uses adaptive thinking (no budget_tokens needed)
-    // all other models use enabled mode with budget_tokens
     if (model.includes("opus-4-7")) {
       createParams.thinking = { type: "adaptive" };
     } else {
@@ -134,21 +140,4 @@ export async function callClaude(request: ClaudeRequest): Promise<ClaudeResponse
     };
 
   } catch (error) {
-    // Re-throw our own typed errors directly
-    if (error instanceof MissingApiKeyError) throw error;
-
-    // Map Anthropic SDK errors to typed errors
-    if (error instanceof Anthropic.AuthenticationError) {
-      throw new ApiAuthError(error.message);
-    }
-    if (error instanceof Anthropic.RateLimitError) {
-      throw new ApiRateLimitError(error.message);
-    }
-    if (error instanceof Anthropic.APIError) {
-      throw new ApiError(`${error.status} ${error.message}`);
-    }
-
-    // Unexpected errors
-    throw new ApiError(error instanceof Error ? error.message : String(error));
-  }
-}
+    if (error instanceof
