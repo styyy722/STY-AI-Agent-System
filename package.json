@@ -19,8 +19,12 @@
     "zod": "latest"
   },
   "devDependencies": {
+    "@types/node": "latest",
     "typescript": "latest",
     "tsx": "latest"
+  },
+  "engines": {
+    "node": ">=20"
   },
   "keywords": [
     "ai-agent",
