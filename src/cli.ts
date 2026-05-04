@@ -16,6 +16,12 @@ import {
   listSessions
 } from "./tools/sessionMemory.js";
 import { validateAgentCommand } from "./tools/inputValidator.js";
+import {
+  MissingApiKeyError,
+  ApiRateLimitError,
+  ApiAuthError,
+  ApiError
+} from "./llm/claudeClient.js";
 
 const program = new Command();
 
@@ -58,11 +64,34 @@ ${filePrompt}
     }
   }
 
-  const response = await runCoreAgent({
-    mode,
-    userInput: finalUserInput,
-    sessionId: options.session
-  });
+  let response;
+  try {
+    response = await runCoreAgent({
+      mode,
+      userInput: finalUserInput,
+      sessionId: options.session
+    });
+  } catch (error) {
+    console.error("");
+    if (error instanceof MissingApiKeyError) {
+      console.error("API Key Error:");
+      console.error(error.message);
+    } else if (error instanceof ApiAuthError) {
+      console.error("Authentication Error:");
+      console.error(error.message);
+    } else if (error instanceof ApiRateLimitError) {
+      console.error("Rate Limit Error:");
+      console.error(error.message);
+    } else if (error instanceof ApiError) {
+      console.error("API Error:");
+      console.error(error.message);
+    } else {
+      console.error("Unexpected error:");
+      console.error(error instanceof Error ? error.message : String(error));
+    }
+    console.error("");
+    process.exit(1);
+  }
 
   console.log("");
   console.log("====================================");
