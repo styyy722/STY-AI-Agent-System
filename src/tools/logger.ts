@@ -17,6 +17,9 @@ export interface LogEntry {
   status: LogStatus;
   errorMessage?: string;
   durationMs: number;
+  confidenceTier?: string;
+  confidenceScore?: number;
+  confidenceFlags?: string[];
 }
 
 // Log directory: <project root>/logs/
@@ -63,6 +66,9 @@ export function buildLogEntry(params: {
   status: LogStatus;
   errorMessage?: string;
   startTime: number;
+  confidenceTier?: string;
+  confidenceScore?: number;
+  confidenceFlags?: string[];
 }): LogEntry {
   return {
     timestamp: new Date().toISOString(),
@@ -76,7 +82,10 @@ export function buildLogEntry(params: {
     skillsMatched: params.skillsMatched,
     status: params.status,
     errorMessage: params.errorMessage,
-    durationMs: Date.now() - params.startTime
+    durationMs: Date.now() - params.startTime,
+    confidenceTier: params.confidenceTier,
+    confidenceScore: params.confidenceScore,
+    confidenceFlags: params.confidenceFlags
   };
 }
 
