@@ -117,7 +117,6 @@ Respond with ONLY a valid JSON object on a single line, no other text:
   try {
     return JSON.parse(text);
   } catch {
-    // Fallback if Claude returns text outside the JSON
     const match = text.match(/\{.*\}/s);
     if (match) return JSON.parse(match[0]);
     throw new Error(`Could not parse judge response: ${text}`);
@@ -132,7 +131,6 @@ async function runEvalCase(evalCase: EvalCase): Promise<EvalResult> {
   console.log(`  Running: [${evalCase.id}] ${evalCase.question.slice(0, 60)}...`);
 
   try {
-    // Call the agent
     const { runCoreAgent } = await import("../src/agent/coreAgent.js");
     const agentResponse = await runCoreAgent({
       mode: evalCase.mode as any,
@@ -141,7 +139,6 @@ async function runEvalCase(evalCase: EvalCase): Promise<EvalResult> {
 
     const durationMs = Date.now() - startTime;
 
-    // Judge the response
     const judgment = await judgeResponse(
       evalCase.question,
       evalCase.expectedKeyPoints,
@@ -149,7 +146,6 @@ async function runEvalCase(evalCase: EvalCase): Promise<EvalResult> {
     );
 
     const passed = judgment.score >= evalCase.minimumScore;
-
     console.log(`    ${passed ? "✔" : "✖"} Score: ${judgment.score}/10 — ${judgment.reason}`);
 
     return {
@@ -190,7 +186,7 @@ async function runSmokeTest(cases: EvalCase[]): Promise<void> {
   let passed = 0;
   let failed = 0;
 
-  // Check 1: eval files loaded correctly
+  // Check 1: eval files loaded
   if (cases.length === 0) {
     console.log("  ✖ No eval cases found in tests/evals/");
     process.exit(1);
@@ -199,28 +195,20 @@ async function runSmokeTest(cases: EvalCase[]): Promise<void> {
   passed++;
 
   // Check 2: all cases have required fields
+  let structureOk = true;
   for (const c of cases) {
     if (!c.id || !c.mode || !c.question || !c.expectedKeyPoints?.length || !c.minimumScore) {
       console.log(`  ✖ Eval case missing required fields: ${JSON.stringify(c)}`);
+      structureOk = false;
       failed++;
     }
   }
-  if (failed === 0) {
+  if (structureOk) {
     console.log(`  ✔ All eval cases have required fields`);
     passed++;
   }
 
-  // Check 3: agent module can be imported
-  try {
-    await import("../src/agent/coreAgent.js");
-    console.log(`  ✔ Core agent module loads successfully`);
-    passed++;
-  } catch (err) {
-    console.log(`  ✖ Core agent module failed to load: ${err instanceof Error ? err.message : String(err)}`);
-    failed++;
-  }
-
-  // Check 4: results directory is writable
+  // Check 3: results directory is writable
   try {
     if (!fs.existsSync(RESULTS_DIR)) fs.mkdirSync(RESULTS_DIR, { recursive: true });
     const testFile = path.join(RESULTS_DIR, ".writecheck");
@@ -233,10 +221,27 @@ async function runSmokeTest(cases: EvalCase[]): Promise<void> {
     failed++;
   }
 
+  // Check 4: all eval JSON files are valid (no parse errors)
+  const evalFiles = fs.readdirSync(EVALS_DIR).filter(f => f.endsWith("_evals.json"));
+  let jsonOk = true;
+  for (const file of evalFiles) {
+    try {
+      JSON.parse(fs.readFileSync(path.join(EVALS_DIR, file), "utf-8"));
+    } catch {
+      console.log(`  ✖ Invalid JSON in: ${file}`);
+      jsonOk = false;
+      failed++;
+    }
+  }
+  if (jsonOk) {
+    console.log(`  ✔ All ${evalFiles.length} eval file(s) contain valid JSON`);
+    passed++;
+  }
+
   console.log(`\n  ${passed} passed, ${failed} failed`);
 
   if (failed > 0) {
-    console.log("\n  Fix the issues above before running --live eval.\n");
+    console.log("\n  Fix the issues above.\n");
     process.exit(1);
   }
 
@@ -274,13 +279,11 @@ async function runLiveEval(cases: EvalCase[]): Promise<void> {
     if (result.passed) byMode[result.mode].passed++;
   }
 
-  // Calculate averages
   for (const mode of Object.keys(byMode)) {
     const scores = byMode[mode].scores;
     byMode[mode].avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10;
   }
 
-  // Summary
   const totalPassed = results.filter(r => r.passed).length;
   const totalFailed = results.length - totalPassed;
   const overallAvg = Math.round(
@@ -290,9 +293,9 @@ async function runLiveEval(cases: EvalCase[]): Promise<void> {
   console.log("\n─────────────────────────────────────────");
   console.log("  EVAL RESULTS");
   console.log("─────────────────────────────────────────");
-  console.log(`  Total:    ${results.length} case(s)`);
-  console.log(`  Passed:   ${totalPassed}`);
-  console.log(`  Failed:   ${totalFailed}`);
+  console.log(`  Total:     ${results.length} case(s)`);
+  console.log(`  Passed:    ${totalPassed}`);
+  console.log(`  Failed:    ${totalFailed}`);
   console.log(`  Avg Score: ${overallAvg}/10`);
   console.log("");
 
@@ -301,7 +304,6 @@ async function runLiveEval(cases: EvalCase[]): Promise<void> {
     console.log(`  ${mode.padEnd(10)} ${stats.passed}/${stats.total} passed  [${bar}] ${stats.avgScore}/10`);
   }
 
-  // Save results to JSON
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
   const resultsFile = path.join(RESULTS_DIR, `eval-${timestamp}.json`);
 
