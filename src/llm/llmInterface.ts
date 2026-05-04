@@ -1,20 +1,26 @@
 import type { ConversationMessage } from "../tools/sessionMemory.js";
 
-// The standard shape every LLM client must accept
+// Supported image formats for both Claude and OpenAI vision
+export type ImageMediaType = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
+
+export interface ImageAttachment {
+  base64: string;
+  mediaType: ImageMediaType;
+}
+
 export interface LLMRequest {
   systemPrompt: string;
   userInput: string;
   usePremiumModel?: boolean;
   maxTokens?: number;
   history?: ConversationMessage[];
+  images?: ImageAttachment[];   // NEW: optional image attachments
 }
 
-// The standard shape every LLM client must return
 export interface LLMResponse {
   text: string;
 }
 
-// Any LLM client (Claude, OpenAI, etc.) must implement this
 export interface LLMClient {
   complete(request: LLMRequest): Promise<LLMResponse>;
 }
