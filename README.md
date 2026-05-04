@@ -51,6 +51,9 @@ sty-agent finance "Explain WACC for Telstra"
 sty-agent finance "Analyse AAPL stock"
 sty-agent data "Summarise this sales dataset"
 sty-agent report "Write an executive summary"
+sty-agent skills
+sty-agent session list
+sty-agent session clear <session-id>
 ```
 
 ---
@@ -66,6 +69,8 @@ Supported file types:
 .md
 .csv
 .json
+.xlsx
+.pdf
 ```
 
 Example commands:
@@ -129,6 +134,10 @@ STY-AI-Agent-System/
 │   └── executive-reporting/
 │       └── SKILL.md
 │
+├── scripts/
+│   ├── extract_xlsx.py
+│   └── extract_pdf.py
+│
 ├── src/
 │   ├── agent/
 │   │   └── coreAgent.ts
@@ -141,7 +150,9 @@ STY-AI-Agent-System/
 │   │
 │   ├── tools/
 │   │   ├── fileReader.ts
-│   │   └── outputWriter.ts
+│   │   ├── inputValidator.ts
+│   │   ├── outputWriter.ts
+│   │   └── sessionMemory.ts
 │   │
 │   └── cli.ts
 │
@@ -412,13 +423,11 @@ This project is still in early development.
 Current limitations:
 
 - The package is not published to npm yet.
-- Excel and PDF file reading are not supported yet.
-- The package is not published to npm yet.
 - The agent depends on a valid Anthropic API key.
-- Skill loading is currently based on keyword matching.
-- The agent depends on a valid Anthropic API key.
-- Skill loading is currently based on keyword matching.
-- File input is currently limited to simple text-based files.
+- Skill matching is based on keyword detection and may miss unusual phrasing.
+- Session memory is stored in the OS temp directory and does not persist across system restarts.
+- Excel reading works best on well-structured spreadsheets; heavily formatted or merged-cell files may not parse cleanly.
+- PDF reading extracts text and tables but does not support scanned or image-based PDFs.
 
 ---
 
