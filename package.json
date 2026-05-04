@@ -16,7 +16,6 @@
     "@anthropic-ai/sdk": "^0.92.0",
     "commander": "^14.0.3",
     "dotenv": "^17.4.2",
-    "ora": "^8.2.0",
     "ora": "^8.2.0"
   },
   "devDependencies": {
