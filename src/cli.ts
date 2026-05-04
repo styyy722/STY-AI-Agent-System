@@ -15,6 +15,7 @@ import {
   clearSession,
   listSessions
 } from "./tools/sessionMemory.js";
+import { getLogDir_public } from "./tools/logger.js";
 import { validateAgentCommand } from "./tools/inputValidator.js";
 import {
   MissingApiKeyError,
@@ -367,6 +368,86 @@ program
   .option("-s, --session <id>", "Session ID to maintain conversation history")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("report", request, options);
+  });
+
+program
+  .command("logs")
+  .description("Show the audit log directory and recent activity")
+  .option("-n, --lines <number>", "Number of recent log entries to show", "20")
+  .action(async (options: { lines: string }) => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const logDir = getLogDir_public();
+    const maxLines = parseInt(options.lines) || 20;
+
+    console.log("");
+    console.log("====================================");
+    console.log("STY Agent Audit Logs");
+    console.log("====================================");
+    console.log("");
+    console.log("Log directory: " + logDir);
+    console.log("");
+
+    if (!fs.existsSync(logDir)) {
+      console.log("No logs found yet. Run a command first.");
+      console.log("");
+      return;
+    }
+
+    const files = fs.readdirSync(logDir)
+      .filter((f: string) => f.endsWith(".log"))
+      .sort()
+      .reverse();
+
+    if (files.length === 0) {
+      console.log("No log files found.");
+      console.log("");
+      return;
+    }
+
+    const entries: string[] = [];
+    for (const file of files) {
+      const filePath = path.join(logDir, file);
+      const lines = fs.readFileSync(filePath, "utf-8")
+        .split("
+")
+        .filter((l: string) => l.trim());
+      entries.unshift(...lines);
+      if (entries.length >= maxLines) break;
+    }
+
+    const recent = entries.slice(-maxLines).reverse();
+
+    recent.forEach((line: string, i: number) => {
+      try {
+        const entry = JSON.parse(line);
+        const time = new Date(entry.timestamp).toLocaleString();
+        const status = entry.status === "success" ? "✔" : "✖";
+        const skills = entry.skillsMatched.length > 0
+          ? " [" + entry.skillsMatched.join(", ") + "]"
+          : "";
+        const duration = (entry.durationMs / 1000).toFixed(1) + "s";
+
+        console.log(`${status} ${time} | ${entry.mode} | ${entry.model} | ${duration}`);
+        console.log(`   Input:  ${entry.inputSummary.slice(0, 100).replace(/
+/g, " ")}`);
+        if (entry.status === "error") {
+          console.log(`   Error:  ${entry.errorMessage}`);
+        } else {
+          console.log(`   Output: ${entry.outputSummary.slice(0, 100).replace(/
+/g, " ")}`);
+        }
+        if (skills) console.log(`   Skills:${skills}`);
+        if (entry.sessionId) console.log(`   Session: ${entry.sessionId}`);
+        console.log("");
+      } catch {
+        // Skip malformed lines
+      }
+    });
+
+    console.log(`Showing ${recent.length} of ${entries.length} total entries across ${files.length} log file(s).`);
+    console.log(`Full logs: ${logDir}`);
+    console.log("");
   });
 
 program.parseAsync();
