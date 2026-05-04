@@ -35,7 +35,7 @@ function readXlsxFile(absolutePath: string): string {
   if (!fs.existsSync(script)) {
     throw new Error(
       `Excel extraction script not found at: ${script}. ` +
-      `Make sure scripts/extract_xlsx.py is present in your project root.`
+      `Make sure script/extract_xlsx.py is present in your project root.`
     );
   }
   try {
@@ -55,7 +55,7 @@ function readPdfFile(absolutePath: string): string {
   if (!fs.existsSync(script)) {
     throw new Error(
       `PDF extraction script not found at: ${script}. ` +
-      `Make sure scripts/extract_pdf.py is present in your project root.`
+      `Make sure script/extract_pdf.py is present in your project root.`
     );
   }
   try {
