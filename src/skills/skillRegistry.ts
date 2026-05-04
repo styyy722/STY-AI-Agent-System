@@ -56,6 +56,25 @@ const SKILL_ROOTS: SkillRoot[] = [
       "dashboard",
       "kpi"
     ]
+  },
+  {
+    category: "report",
+    rootFolder: "report_skills",
+    fallbackKeywords: [
+      "report",
+      "executive summary",
+      "board paper",
+      "board-ready",
+      "consulting",
+      "recommendation",
+      "business case",
+      "stakeholder",
+      "slide",
+      "presentation",
+      "summary",
+      "risk",
+      "decision paper"
+    ]
   }
 ];
 
@@ -134,6 +153,19 @@ const EXTRA_KEYWORDS_BY_FOLDER: Record<string, string[]> = {
     "recall",
     "cross validation",
     "machine learning"
+  ],
+  "executive-reporting": [
+    "executive summary",
+    "board paper",
+    "board-ready",
+    "consulting-style",
+    "recommendation",
+    "business report",
+    "slide-ready",
+    "stakeholder communication",
+    "decision paper",
+    "business case",
+    "risk summary"
   ]
 };
 
