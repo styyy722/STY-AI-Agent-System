@@ -6,6 +6,7 @@ import {
 } from "../tools/sessionMemory.js";
 import { writeLog, buildLogEntry } from "../tools/logger.js";
 import { scoreOutput, formatConfidenceBlock, type ConfidenceResult } from "../tools/confidenceScorer.js";
+import { requiresReview, addToReviewQueue } from "../tools/reviewQueue.js";
 
 export type AgentMode = "general" | "finance" | "data" | "report";
 
@@ -23,6 +24,8 @@ export interface AgentResponse {
   sessionId?: string;
   confidence?: ConfidenceResult;
   confidenceBlock?: string;
+  reviewQueued?: boolean;
+  reviewId?: string;
 }
 
 export function buildSystemPrompt(mode: AgentMode): string {
@@ -207,6 +210,22 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       confidenceFlags: confidence.flags
     }));
 
+    // Add to review queue if mode + confidence requires it
+    let reviewQueued = false;
+    let reviewId: string | undefined;
+
+    if (requiresReview(request.mode, confidence)) {
+      const queueItem = addToReviewQueue({
+        mode: request.mode,
+        sessionId: request.sessionId,
+        userInput: request.userInput,
+        agentOutput: claudeResponse.text,
+        confidence
+      });
+      reviewQueued = true;
+      reviewId = queueItem.id;
+    }
+
     return {
       mode: request.mode,
       title: buildTitle(request.mode),
@@ -214,7 +233,9 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       nextSteps: buildNextSteps(request.mode),
       sessionId: request.sessionId,
       confidence,
-      confidenceBlock
+      confidenceBlock,
+      reviewQueued,
+      reviewId
     };
 
   } catch (error) {
