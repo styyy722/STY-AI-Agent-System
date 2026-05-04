@@ -1,13 +1,11 @@
 import Anthropic from "@anthropic-ai/sdk";
 import "dotenv/config";
-import type { ConversationMessage } from "../tools/sessionMemory.js";
 import { checkBudget } from "../tools/costTracker.js";
 import type { LLMRequest, LLMResponse } from "./llmInterface.js";
 
 export interface ClaudeRequest extends LLMRequest {}
 export interface ClaudeResponse extends LLMResponse {}
 
-// Typed error classes so cli.ts can handle each case differently
 export class BudgetExceededError extends Error {
   constructor(spentUSD: number, budgetUSD: number) {
     super(
@@ -74,7 +72,7 @@ export async function callClaude(request: LLMRequest): Promise<LLMResponse> {
   const outputFormat = process.env.OUTPUT_FORMAT || "markdown";
   const enrichedSystemPrompt = `${request.systemPrompt}\n\nResponse style: ${agentStyle}.\nOutput format: ${outputFormat}.`;
 
-  // Build the last user message — plain string or content array if images are attached
+  // Build the last user message — plain string, or content array if images attached
   let lastUserContent: string | Anthropic.ContentBlockParam[];
 
   if (request.images && request.images.length > 0) {
@@ -107,7 +105,10 @@ export async function callClaude(request: LLMRequest): Promise<LLMResponse> {
 
   const thinkingBudget = parseInt(process.env.THINKING_BUDGET_TOKENS || "0");
   const useThinking = thinkingBudget >= 1024;
-  const maxTokens = request.maxTokens ?? parseInt(process.env.MAX_TOKENS || "0") || 4000;
+
+  // ✅ Fixed: parentheses added to disambiguate ?? and ||
+  const maxTokens = request.maxTokens ?? (parseInt(process.env.MAX_TOKENS || "0") || 4000);
+
   const effectiveMaxTokens = useThinking
     ? Math.max(maxTokens, thinkingBudget + 2000)
     : maxTokens;
@@ -140,4 +141,10 @@ export async function callClaude(request: LLMRequest): Promise<LLMResponse> {
     };
 
   } catch (error) {
-    if (error instanceof
+    if (error instanceof MissingApiKeyError) throw error;
+    if (error instanceof Anthropic.AuthenticationError) throw new ApiAuthError(error.message);
+    if (error instanceof Anthropic.RateLimitError) throw new ApiRateLimitError(error.message);
+    if (error instanceof Anthropic.APIError) throw new ApiError(`${error.status} ${error.message}`);
+    throw new ApiError(error instanceof Error ? error.message : String(error));
+  }
+}
