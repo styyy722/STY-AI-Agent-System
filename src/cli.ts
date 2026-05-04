@@ -24,6 +24,14 @@ import {
   getLedgerDir_public
 } from "./tools/costTracker.js";
 import {
+  checkModeAccess,
+  checkFileAccess,
+  checkCanExport,
+  checkCanApproveReview,
+  getCurrentUser,
+  writeDefaultPolicy
+} from "./tools/accessControl.js";
+import {
   getPendingItems,
   getAllItems,
   approveItem,
@@ -61,6 +69,14 @@ async function handleAgentCommand(
 ) {
   validateAgentCommand(userInput, options);
 
+  const modeAccess = checkModeAccess(mode);
+  if (!modeAccess.allowed) {
+    console.error("");
+    console.error("Access denied: " + modeAccess.reason);
+    console.error("");
+    process.exit(1);
+  }
+
   const spinnerLabels: Record<string, string> = {
     general: "Thinking...",
     finance: "Running finance analysis...",
@@ -71,6 +87,18 @@ async function handleAgentCommand(
   let finalUserInput = userInput;
 
   if (options.file) {
+    const fileAccess = checkFileAccess(options.file);
+    if (!fileAccess.allowed) {
+      console.error("");
+      console.error("File access denied: " + fileAccess.reason);
+      console.error("");
+      process.exit(1);
+    }
+    if (fileAccess.warning) {
+      console.warn("");
+      console.warn("⚠ Data classification warning: " + fileAccess.warning);
+      console.warn("");
+    }
     try {
       const fileContext = readBusinessFile(options.file);
       const filePrompt = buildFilePrompt(fileContext);
@@ -489,6 +517,13 @@ reviewCmd
   .option("-b, --by <name>", "Reviewer name", "reviewer")
   .option("-n, --note <note>", "Optional review note")
   .action((id: string, options: { by: string; note?: string }) => {
+    const approveAccess = checkCanApproveReview();
+    if (!approveAccess.allowed) {
+      console.error("");
+      console.error("Access denied: " + approveAccess.reason);
+      console.error("");
+      process.exit(1);
+    }
     const item = approveItem(id, options.by, options.note);
     if (!item) {
       console.error(`Review item "${id}" not found.`);
@@ -523,6 +558,13 @@ reviewCmd
   .description("Export an approved output to a file")
   .requiredOption("-o, --output <path>", "Output file path")
   .action((id: string, options: { output: string }) => {
+    const exportAccess = checkCanExport();
+    if (!exportAccess.allowed) {
+      console.error("");
+      console.error("Access denied: " + exportAccess.reason);
+      console.error("");
+      process.exit(1);
+    }
     const success = exportApprovedOutput(id, options.output);
     if (!success) {
       console.error(`Cannot export: item "${id}" not found or not yet approved.`);
@@ -530,6 +572,38 @@ reviewCmd
     }
     console.log("");
     console.log(`✔ Exported approved output to: ${options.output}`);
+    console.log("");
+  });
+
+program
+  .command("policy")
+  .description("Show and manage access policy")
+  .option("--init", "Create a default access_policy.json in the project root")
+  .action((options: { init?: boolean }) => {
+    if (options.init) {
+      writeDefaultPolicy();
+      console.log("");
+      console.log("✔ Default access policy written to: access_policy.json");
+      console.log("  Edit this file to configure users, modes, and data classification rules.");
+      console.log("");
+      return;
+    }
+
+    const user = getCurrentUser();
+    console.log("");
+    console.log("====================================");
+    console.log("STY Agent — Access Policy");
+    console.log("====================================");
+    console.log("");
+    console.log(`Current user:    ${user.username}`);
+    console.log(`Access level:    ${user.accessLevel}`);
+    console.log(`Allowed modes:   ${user.allowedModes.join(", ")}`);
+    console.log(`Daily budget:    $${user.maxDailyBudgetUSD.toFixed(2)}`);
+    console.log(`Can export:      ${user.canExportOutputs ? "Yes" : "No"}`);
+    console.log(`Can approve:     ${user.canApproveReviews ? "Yes" : "No"}`);
+    console.log("");
+    console.log("Policy file: " + (require("node:fs").existsSync(require("node:path").join(process.cwd(), "access_policy.json")) ? "access_policy.json (custom)" : "default (no policy file found)"));
+    console.log("Run: sty-agent policy --init  to create a customisable policy file.");
     console.log("");
   });
 
