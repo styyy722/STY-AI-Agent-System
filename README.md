@@ -136,7 +136,8 @@ STY-AI-Agent-System/
 │   │   └── skillRegistry.ts
 │   │
 │   ├── tools/
-│   │   └── fileReader.ts
+│   │   ├── fileReader.ts
+│   │   └── outputWriter.ts
 │   │
 │   └── cli.ts
 │
@@ -317,7 +318,9 @@ Current limitations:
 
 - The package is not published to npm yet.
 - Excel and PDF file reading are not supported yet.
-- Output saving with `--output` is not implemented yet.
+- The package is not published to npm yet.
+- The agent depends on a valid Anthropic API key.
+- Skill loading is currently based on keyword matching.
 - The agent depends on a valid Anthropic API key.
 - Skill loading is currently based on keyword matching.
 - File input is currently limited to simple text-based files.
