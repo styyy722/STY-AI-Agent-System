@@ -82,7 +82,7 @@ const SKILL_ROOTS: SkillRoot[] = [
       "chart", "graph", "visuali", "plot", "histogram", "scatter",
       "heatmap", "bar chart", "line chart",
       // Business analytics
-      "insight", "business intelligence", "bi", "report", "summary",
+      "insight", "business intelligence", "bi",
       "distribution", "average", "median", "mean", "variance", "std"
     ]
   },
@@ -208,6 +208,12 @@ const EXTRA_KEYWORDS_BY_FOLDER: Record<string, string[]> = {
   ],
 
   // --- Report skills ---
+  "exec_summary_generator": [
+    "executive summary", "executive brief", "board summary", "board briefing",
+    "write a summary for", "condensed summary", "one page", "one-page",
+    "board deck", "exec summary", "summarise for", "summarize for",
+    "key findings", "decision ready", "c-suite summary"
+  ],
   "executive-reporting": [
     "executive summary", "board paper", "board-ready", "consulting-style",
     "recommendation", "business report", "slide-ready",
@@ -332,10 +338,12 @@ export function findRelevantSkills(userInput: string): AgentSkill[] {
   const normalizedInput = userInput.toLowerCase();
   const availableSkills = getAvailableSkills();
 
+  const ORDER: Record<string, number> = { report: 0, finance: 1, data: 2, general: 3 };
   return availableSkills
     .filter((skill) =>
       skill.keywords.some((keyword) => normalizedInput.includes(keyword))
     )
+    .sort((a, b) => (ORDER[a.category] ?? 9) - (ORDER[b.category] ?? 9))
     .slice(0, 8);
 }
 
