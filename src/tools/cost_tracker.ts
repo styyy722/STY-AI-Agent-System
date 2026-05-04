@@ -87,7 +87,7 @@ function estimateCost(model: string, inputChars: number, outputChars: number): {
 
 export function getDailyBudgetUSD(): number {
   const val = parseFloat(process.env.DAILY_BUDGET_USD ?? "");
-  return isNaN(val) ? 5.00; // default $5/day
+  return isNaN(val) ? 5.00 : val; // default $5/day
 }
 
 export function getDailySpend(date: string = todayStr()): number {
