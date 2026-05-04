@@ -125,6 +125,10 @@ STY-AI-Agent-System/
 ├── data_skills/
 │   └── ...
 │
+├── report_skills/
+│   └── executive-reporting/
+│       └── SKILL.md
+│
 ├── src/
 │   ├── agent/
 │   │   └── coreAgent.ts
@@ -224,6 +228,7 @@ Current skill categories include:
 ```text
 finance_skills/
 data_skills/
+report_skills/
 ```
 
 The skill registry scans available skill folders and loads relevant skill instructions based on the user’s request.
