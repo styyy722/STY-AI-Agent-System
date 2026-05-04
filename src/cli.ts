@@ -1,11 +1,18 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import fs from "node:fs";
-import path from "node:path";
 import { runCoreAgent, type AgentMode } from "./agent/coreAgent.js";
-import { readBusinessFile, buildFilePrompt } from "./tools/fileReader.js";
-import { saveAgentOutputFile } from "./tools/outputWriter.js";
+import {
+  readBusinessFile,
+  readMultipleFiles,
+  readFolder,
+  buildFilePrompt,
+  buildMultiFilePrompt
+} from "./tools/fileReader.js";
+import {
+  saveAgentOutput,
+  formatSavedOutputContent
+} from "./tools/outputWriter.js";
 import {
   getAvailableSkills,
   type SkillCategory
@@ -54,7 +61,10 @@ import ora from "ora";
 const program = new Command();
 
 interface CommandOptions {
-  file?: string;
+  file?: string[];        // repeatable — multiple --file flags
+  folder?: string;        // read entire directory
+  recursive?: boolean;    // used with --folder: read subdirectories
+  pattern?: string;       // used with --folder: filter filenames
   output?: string;
   session?: string;
 }
@@ -87,29 +97,83 @@ async function handleAgentCommand(
 
   let finalUserInput = userInput;
 
-  if (options.file) {
-    const fileAccess = checkFileAccess(options.file);
-    if (!fileAccess.allowed) {
+  // ── Folder read ──────────────────────────────────────────────────────────
+  if (options.folder) {
+    const folderAccess = checkFileAccess(options.folder);
+    if (!folderAccess.allowed) {
       console.error("");
-      console.error("File access denied: " + fileAccess.reason);
+      console.error("Folder access denied: " + folderAccess.reason);
       console.error("");
       process.exit(1);
     }
-    if (fileAccess.warning) {
+    if (folderAccess.warning) {
       console.warn("");
-      console.warn("⚠ Data classification warning: " + fileAccess.warning);
+      console.warn("⚠ Data classification warning: " + folderAccess.warning);
       console.warn("");
     }
     try {
-      const fileContext = readBusinessFile(options.file);
-      const filePrompt = buildFilePrompt(fileContext);
-
-      finalUserInput = `
-User request:
+      const multiCtx = readFolder(options.folder, {
+        recursive: options.recursive ?? false,
+        pattern: options.pattern
+      });
+      const filePrompt = buildMultiFilePrompt(multiCtx, options.folder);
+      console.log(``);
+      console.log(`📂 Loaded ${multiCtx.files.length} file(s) from ${options.folder}${multiCtx.skippedFiles.length > 0 ? ` (${multiCtx.skippedFiles.length} skipped)` : ""}`);
+      finalUserInput = `User request:
 ${userInput}
 
-${filePrompt}
-`;
+${filePrompt}`;
+    } catch (error) {
+      console.error("");
+      console.error("Folder error:");
+      console.error(error instanceof Error ? error.message : "Unknown folder error");
+      console.error("");
+      process.exit(1);
+    }
+  }
+
+  // ── Multiple file read ────────────────────────────────────────────────────
+  if (!options.folder && options.file && options.file.length > 0) {
+    const files = Array.isArray(options.file) ? options.file : [options.file];
+
+    // Access check each file
+    for (const f of files) {
+      const fileAccess = checkFileAccess(f);
+      if (!fileAccess.allowed) {
+        console.error("");
+        console.error(`File access denied (): ` + fileAccess.reason);
+        console.error("");
+        process.exit(1);
+      }
+      if (fileAccess.warning) {
+        console.warn("");
+        console.warn(`⚠ Data classification warning (${f}): ` + fileAccess.warning);
+        console.warn("");
+      }
+    }
+
+    try {
+      if (files.length === 1) {
+        // Single file — use original single-file prompt for cleaner output
+        const fileContext = readBusinessFile(files[0]);
+        const filePrompt = buildFilePrompt(fileContext);
+        console.log(``);
+        console.log(`📄 Loaded: ${fileContext.fileName}`);
+        finalUserInput = `User request:
+${userInput}
+
+${filePrompt}`;
+      } else {
+        // Multiple files — use combined prompt
+        const multiCtx = readMultipleFiles(files);
+        const filePrompt = buildMultiFilePrompt(multiCtx, `${files.length} files`);
+        console.log(``);
+        console.log(`📄 Loaded ${multiCtx.files.length} file(s)${multiCtx.skippedFiles.length > 0 ? ` (${multiCtx.skippedFiles.length} skipped)` : ""}`);
+        finalUserInput = `User request:
+${userInput}
+
+${filePrompt}`;
+      }
     } catch (error) {
       console.error("");
       console.error("File error:");
@@ -186,35 +250,25 @@ ${filePrompt}
     console.log("");
   }
 
-    if (options.output) {
-      if (response.reviewQueued && response.reviewId) {
-        console.log("");
-        console.log("Output was not saved because this response requires review first.");
-        console.log(`Review ID: ${response.reviewId}`);
-        console.log(`Approve with: sty-agent review approve ${response.reviewId}`);
-        console.log(
-          `Then export with: sty-agent review export ${response.reviewId} --output ${options.output}`
-        );
-        console.log("");
-        return;
-      }
-  
-      try {
-        const savedFile = await saveAgentOutputFile(options.output, {
-          title: response.title,
-          summary: response.summary,
-          nextSteps: response.nextSteps
-        });
-  
-        console.log("");
-        console.log(`Output saved to: ${savedFile.outputPath}`);
-      } catch (error) {
-        console.error("");
-        console.error("Output save error:");
-        console.error(error instanceof Error ? error.message : "Unknown output error");
-        console.error("");
-        process.exit(1);
-      }
+  if (options.output) {
+    try {
+      const savedContent = formatSavedOutputContent(
+        response.title,
+        response.summary,
+        response.nextSteps
+      );
+
+      const savedFile = saveAgentOutput(options.output, savedContent);
+
+      console.log("");
+      console.log(`Output saved to: ${savedFile.outputPath}`);
+    } catch (error) {
+      console.error("");
+      console.error("Output save error:");
+      console.error(error instanceof Error ? error.message : "Unknown output error");
+      console.error("");
+      process.exit(1);
+    }
   }
 
   console.log("");
@@ -329,7 +383,7 @@ program
     if (allPassed) {
       console.log("All checks passed. Your agent is ready to use.");
       console.log("");
-      console.log('Try: sty-agent finance "Explain WACC"');
+      console.log("Try: sty-agent finance "Explain WACC"");
     } else {
       console.log("Some checks failed. Fix the issues above before using the agent.");
       process.exit(1);
@@ -410,7 +464,10 @@ program
   .command("ask")
   .description("Ask the general business agent a question")
   .argument("<request>", "Your business request")
-  .option("-f, --file <path>", "Attach a local file")
+  .option("-f, --file <path>", "Attach a file (repeat for multiple: -f file1.csv -f file2.xlsx)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("--folder <path>", "Read all supported files from a folder")
+  .option("-r, --recursive", "With --folder: also read files in subdirectories")
+  .option("--pattern <text>", "With --folder: only include files whose name contains this text")
   .option("-o, --output <path>", "Save the agent response to a file")
   .option("-s, --session <id>", "Session ID to maintain conversation history")
   .action(async (request: string, options: CommandOptions) => {
@@ -421,7 +478,10 @@ program
   .command("finance")
   .description("Run finance-related AI workflows")
   .argument("<request>", "Your finance request")
-  .option("-f, --file <path>", "Attach a local file")
+  .option("-f, --file <path>", "Attach a file (repeat for multiple: -f file1.csv -f file2.xlsx)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("--folder <path>", "Read all supported files from a folder")
+  .option("-r, --recursive", "With --folder: also read files in subdirectories")
+  .option("--pattern <text>", "With --folder: only include files whose name contains this text")
   .option("-o, --output <path>", "Save the agent response to a file")
   .option("-s, --session <id>", "Session ID to maintain conversation history")
   .action(async (request: string, options: CommandOptions) => {
@@ -432,7 +492,10 @@ program
   .command("data")
   .description("Run data analytics AI workflows")
   .argument("<request>", "Your data analytics request")
-  .option("-f, --file <path>", "Attach a local file")
+  .option("-f, --file <path>", "Attach a file (repeat for multiple: -f file1.csv -f file2.xlsx)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("--folder <path>", "Read all supported files from a folder")
+  .option("-r, --recursive", "With --folder: also read files in subdirectories")
+  .option("--pattern <text>", "With --folder: only include files whose name contains this text")
   .option("-o, --output <path>", "Save the agent response to a file")
   .option("-s, --session <id>", "Session ID to maintain conversation history")
   .action(async (request: string, options: CommandOptions) => {
@@ -443,7 +506,10 @@ program
   .command("report")
   .description("Generate business reports and executive summaries")
   .argument("<request>", "Your reporting request")
-  .option("-f, --file <path>", "Attach a local file")
+  .option("-f, --file <path>", "Attach a file (repeat for multiple: -f file1.csv -f file2.xlsx)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("--folder <path>", "Read all supported files from a folder")
+  .option("-r, --recursive", "With --folder: also read files in subdirectories")
+  .option("--pattern <text>", "With --folder: only include files whose name contains this text")
   .option("-o, --output <path>", "Save the agent response to a file")
   .option("-s, --session <id>", "Session ID to maintain conversation history")
   .action(async (request: string, options: CommandOptions) => {
@@ -477,7 +543,8 @@ reviewCmd
       const statusIcon = item.status === "approved" ? "✔" : item.status === "rejected" ? "✖" : "⏳";
       console.log(`${i + 1}. [${statusIcon} ${item.status.toUpperCase()}] ${item.id}`);
       console.log(`   ${time} | ${item.mode} | Confidence: ${item.confidence.tier} (${item.confidence.score}/100)`);
-      console.log(`   Request: ${item.userInput.slice(0, 80).replace(/\n/g, " ")}...`);
+      console.log(`   Request: ${item.userInput.slice(0, 80).replace(/
+/g, " ")}...`);
       if (item.status !== "pending") {
         console.log(`   Reviewed by: ${item.reviewedBy} | ${item.reviewNote ?? ""}`);
       }
@@ -621,13 +688,7 @@ program
     console.log(`Can export:      ${user.canExportOutputs ? "Yes" : "No"}`);
     console.log(`Can approve:     ${user.canApproveReviews ? "Yes" : "No"}`);
     console.log("");
-    const policyPath = path.join(process.cwd(), "access_policy.json");
-
-    const policyLabel = fs.existsSync(policyPath)
-      ? "access_policy.json (custom)"
-      : "default (no policy file found)";
-
-    console.log(`Policy file: ${policyLabel}`);
+    console.log("Policy file: " + (require("node:fs").existsSync(require("node:path").join(process.cwd(), "access_policy.json")) ? "access_policy.json (custom)" : "default (no policy file found)"));
     console.log("Run: sty-agent policy --init  to create a customisable policy file.");
     console.log("");
   });
@@ -713,10 +774,10 @@ program
     const entries: string[] = [];
     for (const file of files) {
       const filePath = path.join(logDir, file);
-      const lines = fs
-          .readFileSync(filePath, "utf-8")
-          .split("\n")
-          .filter((l: string) => l.trim());
+      const lines = fs.readFileSync(filePath, "utf-8")
+        .split("
+")
+        .filter((l: string) => l.trim());
       entries.unshift(...lines);
       if (entries.length >= maxLines) break;
     }
@@ -735,11 +796,13 @@ program
 
         const conf = entry.confidenceTier ? ` | ${entry.confidenceTier} confidence` : "";
         console.log(`${status} ${time} | ${entry.mode} | ${entry.model} | ${duration}${conf}`);
-        console.log(`   Input:  ${entry.inputSummary.slice(0, 100).replace(/\n/g, " ")}`);
+        console.log(`   Input:  ${entry.inputSummary.slice(0, 100).replace(/
+/g, " ")}`);
         if (entry.status === "error") {
           console.log(`   Error:  ${entry.errorMessage}`);
         } else {
-          console.log(`   Output: ${entry.outputSummary.slice(0, 100).replace(/\n/g, " ")}`);
+          console.log(`   Output: ${entry.outputSummary.slice(0, 100).replace(/
+/g, " ")}`);
         }
         if (skills) console.log(`   Skills:${skills}`);
         if (entry.sessionId) console.log(`   Session: ${entry.sessionId}`);
