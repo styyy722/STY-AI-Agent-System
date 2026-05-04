@@ -1,0 +1,44 @@
+[
+  {
+    "id": "data-001",
+    "mode": "data",
+    "question": "What are the key steps in an exploratory data analysis (EDA)?",
+    "expectedKeyPoints": [
+      "Understand the dataset shape, dimensions, and column types",
+      "Check for missing values and assess their extent and pattern",
+      "Analyse distributions of numerical features",
+      "Analyse frequency of categorical features",
+      "Check for outliers using statistical methods or visualisation",
+      "Examine correlations between features"
+    ],
+    "minimumScore": 7
+  },
+  {
+    "id": "data-002",
+    "mode": "data",
+    "question": "What are the main strategies for handling missing values in a dataset?",
+    "expectedKeyPoints": [
+      "Drop rows with missing values if the proportion is small",
+      "Impute with mean or median for numerical features",
+      "Impute with mode for categorical features",
+      "Use model-based imputation for complex patterns",
+      "Consider whether data is missing at random or systematically",
+      "Flag missing values with an indicator column if the missingness itself is informative"
+    ],
+    "minimumScore": 7
+  },
+  {
+    "id": "data-003",
+    "mode": "data",
+    "question": "Explain the difference between precision and recall in a classification model.",
+    "expectedKeyPoints": [
+      "Precision is the proportion of positive predictions that are actually positive",
+      "Recall is the proportion of actual positives that are correctly identified",
+      "High precision means few false positives",
+      "High recall means few false negatives",
+      "F1 score is the harmonic mean of precision and recall",
+      "The right balance depends on the business cost of each error type"
+    ],
+    "minimumScore": 7
+  }
+]
