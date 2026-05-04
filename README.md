@@ -81,6 +81,33 @@ When a file is attached, the agent reads the file content and includes it in the
 
 ---
 
+## Output Saving
+
+The agent can save responses to a local file using the `--output` option.
+
+Example commands:
+
+```bash
+sty-agent ask "Summarise this business idea" --output outputs/summary.md
+sty-agent finance "Explain WACC" --output outputs/wacc-analysis.md
+sty-agent data "Run EDA and identify business insights" --file sales.csv --output outputs/eda-report.md
+sty-agent report "Turn this analysis into an executive summary" --file analysis.txt --output outputs/executive-summary.md
+```
+
+If the output folder does not exist, the agent will create it automatically.
+
+For example:
+
+```bash
+sty-agent report "Write an executive summary" --file analysis.txt --output outputs/summary.md
+```
+
+will create:
+
+```text
+outputs/summary.md
+```
+
 ## Project Structure
 
 ```text
