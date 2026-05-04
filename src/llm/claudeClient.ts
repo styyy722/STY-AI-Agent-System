@@ -19,11 +19,9 @@ export interface ClaudeResponse {
 export class BudgetExceededError extends Error {
   constructor(spentUSD: number, budgetUSD: number) {
     super(
-      `Daily budget exceeded. Spent: $${spentUSD.toFixed(4)} / Limit: $${budgetUSD.toFixed(2)}.
-` +
-      `  Update DAILY_BUDGET_USD in .env to raise the limit, or wait until tomorrow.
-` +
-      `  Run: sty-agent usage to see full spend breakdown.`
+      `Daily budget exceeded. Spent: $${spentUSD.toFixed(4)} / Limit: $${budgetUSD.toFixed(2)}.\n` +
+        `  Update DAILY_BUDGET_USD in .env to raise the limit, or wait until tomorrow.\n` +
+        `  Run: sty-agent usage to see full spend breakdown.`
     );
     this.name = "BudgetExceededError";
   }
@@ -33,9 +31,9 @@ export class MissingApiKeyError extends Error {
   constructor() {
     super(
       "Anthropic API key is missing.\n" +
-      "  1. Copy .env.example to .env\n" +
-      "  2. Add your key: ANTHROPIC_API_KEY=sk-ant-...\n" +
-      "  Get a key at: https://console.anthropic.com"
+        "  1. Copy .env.example to .env\n" +
+        "  2. Add your key: ANTHROPIC_API_KEY=sk-ant-...\n" +
+        "  Get a key at: https://console.anthropic.com"
     );
     this.name = "MissingApiKeyError";
   }
@@ -72,6 +70,7 @@ export async function callClaude(request: ClaudeRequest): Promise<ClaudeResponse
   }
 
   const budget = checkBudget();
+
   if (!budget.allowed) {
     throw new BudgetExceededError(budget.spentUSD, budget.budgetUSD);
   }
@@ -82,7 +81,11 @@ export async function callClaude(request: ClaudeRequest): Promise<ClaudeResponse
 
   const agentStyle = process.env.AGENT_STYLE || "professional";
   const outputFormat = process.env.OUTPUT_FORMAT || "markdown";
-  const enrichedSystemPrompt = `${request.systemPrompt}\n\nResponse style: ${agentStyle}.\nOutput format: ${outputFormat}.`;
+
+  const enrichedSystemPrompt = `${request.systemPrompt}
+
+Response style: ${agentStyle}.
+Output format: ${outputFormat}.`;
 
   // Build message list: prior history + current user message
   const messages: Anthropic.MessageParam[] = [
@@ -90,37 +93,56 @@ export async function callClaude(request: ClaudeRequest): Promise<ClaudeResponse
       role: m.role as "user" | "assistant",
       content: m.content
     })),
-    { role: "user", content: request.userInput }
+    {
+      role: "user",
+      content: request.userInput
+    }
   ];
+
+  const envMaxTokens = parseInt(process.env.MAX_TOKENS || "0", 10);
+  const maxTokens = request.maxTokens ?? (envMaxTokens || 4000);
 
   try {
     const message = await anthropic.messages.create({
       model,
-      max_tokens: request.maxTokens ?? parseInt(process.env.MAX_TOKENS || "0") || 4000,
+      max_tokens: maxTokens,
       system: enrichedSystemPrompt,
       messages
     });
 
     const text = message.content
-      .map((block) => (block.type === "text" ? block.text : ""))
+      .map((block) => {
+        if (block.type === "text") {
+          return block.text;
+        }
+
+        return "";
+      })
       .join("\n")
       .trim();
 
     return {
       text: text || "Claude returned an empty response."
     };
-
   } catch (error) {
     // Re-throw our own typed errors directly
-    if (error instanceof MissingApiKeyError) throw error;
+    if (error instanceof MissingApiKeyError) {
+      throw error;
+    }
+
+    if (error instanceof BudgetExceededError) {
+      throw error;
+    }
 
     // Map Anthropic SDK errors to typed errors
     if (error instanceof Anthropic.AuthenticationError) {
       throw new ApiAuthError(error.message);
     }
+
     if (error instanceof Anthropic.RateLimitError) {
       throw new ApiRateLimitError(error.message);
     }
+
     if (error instanceof Anthropic.APIError) {
       throw new ApiError(`${error.status} ${error.message}`);
     }
