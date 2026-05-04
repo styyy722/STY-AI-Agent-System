@@ -1,0 +1,54 @@
+[
+  {
+    "id": "finance-001",
+    "mode": "finance",
+    "question": "What is the WACC formula and what are its key components?",
+    "expectedKeyPoints": [
+      "WACC stands for Weighted Average Cost of Capital",
+      "Formula combines cost of equity and cost of debt",
+      "Weights are based on market value proportions of equity and debt",
+      "Cost of debt is adjusted for tax shield (multiplied by 1 minus tax rate)",
+      "Cost of equity is typically estimated using CAPM"
+    ],
+    "minimumScore": 7
+  },
+  {
+    "id": "finance-002",
+    "mode": "finance",
+    "question": "Explain the Capital Asset Pricing Model (CAPM) and how it is used to estimate the cost of equity.",
+    "expectedKeyPoints": [
+      "CAPM formula: Expected Return = Risk-Free Rate + Beta × (Market Risk Premium)",
+      "Beta measures systematic risk relative to the market",
+      "Risk-free rate is typically a government bond yield",
+      "Market risk premium is the excess return of the market over the risk-free rate",
+      "Higher beta means higher required return"
+    ],
+    "minimumScore": 7
+  },
+  {
+    "id": "finance-003",
+    "mode": "finance",
+    "question": "What is the difference between enterprise value and equity value?",
+    "expectedKeyPoints": [
+      "Enterprise value represents the total value of the business including debt",
+      "Equity value represents only the value attributable to shareholders",
+      "Enterprise value equals equity value plus net debt",
+      "Enterprise value is used for EV/EBITDA multiples",
+      "Equity value is used for P/E multiples"
+    ],
+    "minimumScore": 7
+  },
+  {
+    "id": "finance-004",
+    "mode": "finance",
+    "question": "What are the three main financial statements and how do they connect to each other?",
+    "expectedKeyPoints": [
+      "The three statements are the income statement, balance sheet, and cash flow statement",
+      "Net income from the income statement flows into retained earnings on the balance sheet",
+      "Net income is also the starting point for the cash flow statement",
+      "Changes in balance sheet items drive working capital adjustments in the cash flow statement",
+      "Ending cash on the cash flow statement matches cash on the balance sheet"
+    ],
+    "minimumScore": 7
+  }
+]
