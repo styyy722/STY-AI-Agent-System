@@ -50,6 +50,8 @@ sty-agent finance "Analyse AAPL stock"
 sty-agent data "Summarise this sales dataset"
 sty-agent report "Write an executive summary"
 
+---
+
 ## How it works
 
 STY-AI-Agent-System/
