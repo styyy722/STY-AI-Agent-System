@@ -1,4 +1,5 @@
 import { callClaude } from "../llm/claudeClient.js";
+import { buildSkillContext } from "../skills/skillRegistry.js";
 
 export type AgentMode = "general" | "finance" | "data" | "report";
 
@@ -44,6 +45,8 @@ You specialise in finance workflows including:
 - Financial ratio analysis
 - Investment memo writing
 - Scenario analysis
+- Stock analysis
+- Portfolio analysis
 
 When dealing with finance tasks, clearly explain formulas, assumptions, limitations, and business implications.
 `,
@@ -99,7 +102,7 @@ function buildNextSteps(mode: AgentMode): string[] {
     finance: [
       "Check whether all finance assumptions are available.",
       "Provide company data, market data, or financial statements for deeper analysis.",
-      "Add a WACC or valuation skill module later for more structured finance workflows."
+      "Use specialist skill modules for WACC, stock analysis, and portfolio workflows."
     ],
     data: [
       "Provide a dataset file later so the agent can perform real analysis.",
@@ -117,10 +120,15 @@ function buildNextSteps(mode: AgentMode): string[] {
 }
 
 export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse> {
-  const systemPrompt = buildSystemPrompt(request.mode);
+  const baseSystemPrompt = buildSystemPrompt(request.mode);
+  const skillContext = buildSkillContext(request.userInput);
+
+  const finalSystemPrompt = skillContext
+    ? `${baseSystemPrompt}\n\n${skillContext}`
+    : baseSystemPrompt;
 
   const claudeResponse = await callClaude({
-    systemPrompt,
+    systemPrompt: finalSystemPrompt,
     userInput: request.userInput
   });
 
