@@ -7,12 +7,20 @@ import {
   saveAgentOutput,
   formatSavedOutputContent
 } from "./tools/outputWriter.js";
+import {
+  getAvailableSkills,
+  type SkillCategory
+} from "./skills/skillRegistry.js";
 
 const program = new Command();
 
 interface CommandOptions {
   file?: string;
   output?: string;
+}
+
+interface SkillsCommandOptions {
+  category?: SkillCategory;
 }
 
 async function handleAgentCommand(
@@ -86,6 +94,42 @@ ${filePrompt}
   console.log("");
 }
 
+function printAvailableSkills(options: SkillsCommandOptions = {}) {
+  const skills = getAvailableSkills();
+
+  const filteredSkills = options.category
+    ? skills.filter((skill) => skill.category === options.category)
+    : skills;
+
+  console.log("");
+  console.log("====================================");
+  console.log("Installed STY Agent Skills");
+  console.log("====================================");
+  console.log("");
+
+  if (filteredSkills.length === 0) {
+    console.log("No skills found.");
+    console.log("");
+    console.log("Check that your skill folders exist:");
+    console.log("- finance_skills/");
+    console.log("- data_skills/");
+    console.log("- report_skills/");
+    console.log("");
+    return;
+  }
+
+  filteredSkills.forEach((skill, index) => {
+    console.log(`${index + 1}. ${skill.name}`);
+    console.log(`   Category: ${skill.category}`);
+    console.log(`   Folder: ${skill.rootFolder}/${skill.folder}`);
+    console.log(`   Description: ${skill.description}`);
+    console.log("");
+  });
+
+  console.log(`Total skills found: ${filteredSkills.length}`);
+  console.log("");
+}
+
 program
   .name("sty-agent")
   .description("A Claude-powered AI business agent for finance, data analytics, and reporting workflows.")
@@ -96,6 +140,17 @@ program
   .description("Test whether the agent is working")
   .action(() => {
     console.log("Hello! STY AI Agent System is working.");
+  });
+
+program
+  .command("skills")
+  .description("List installed agent skills")
+  .option(
+    "-c, --category <category>",
+    "Filter skills by category: finance, data, report, or general"
+  )
+  .action((options: SkillsCommandOptions) => {
+    printAvailableSkills(options);
   });
 
 program
