@@ -4,6 +4,7 @@ import "dotenv/config";
 export interface ClaudeRequest {
   systemPrompt: string;
   userInput: string;
+  usePremiumModel?: boolean;
 }
 
 export interface ClaudeResponse {
@@ -15,7 +16,13 @@ const anthropic = new Anthropic({
 });
 
 export async function callClaude(request: ClaudeRequest): Promise<ClaudeResponse> {
-  const model = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+  const defaultModel = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+  const premiumModel = process.env.ANTHROPIC_MODEL_PREMIUM || "claude-opus-4-7";
+  const model = request.usePremiumModel ? premiumModel : defaultModel;
+
+  const agentStyle = process.env.AGENT_STYLE || "professional";
+  const outputFormat = process.env.OUTPUT_FORMAT || "markdown";
+  const enrichedSystemPrompt = `${request.systemPrompt}\n\nResponse style: ${agentStyle}.\nOutput format: ${outputFormat}.`;
 
   if (!process.env.ANTHROPIC_API_KEY) {
     return {
@@ -27,7 +34,7 @@ export async function callClaude(request: ClaudeRequest): Promise<ClaudeResponse
     const message = await anthropic.messages.create({
       model,
       max_tokens: 1200,
-      system: request.systemPrompt,
+      system: enrichedSystemPrompt,
       messages: [
         {
           role: "user",
