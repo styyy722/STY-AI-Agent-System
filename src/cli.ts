@@ -3,7 +3,7 @@
 import { Command } from "commander";
 import path from "node:path";
 import { runCoreAgent, type AgentMode } from "./agent/coreAgent.js";
-import { runMultiAgent, type SubAgentRole } from "./agent/multiAgent.js";
+import { runMultiAgent } from "./agent/multiAgent.js";
 import {
   readBusinessFile,
   readMultipleFiles,
@@ -28,6 +28,13 @@ import {
   initDb,
   getDbPath_public
 } from "./tools/sessionMemory.js";
+import {
+  storeMemory,
+  listMemories,
+  deleteMemory,
+  clearAllMemories,
+  type MemoryCategory
+} from "./tools/memoryManager.js";
 import { getLogDir_public } from "./tools/logger.js";
 import {
   indexDocument,
@@ -147,7 +154,6 @@ async function handleAgentCommand(
   if (!options.folder && options.file && options.file.length > 0) {
     const files = Array.isArray(options.file) ? options.file : [options.file];
 
-    // Access check every file
     for (const f of files) {
       const fileAccess = checkFileAccess(f);
       if (!fileAccess.allowed) {
@@ -163,11 +169,9 @@ async function handleAgentCommand(
       }
     }
 
-    // Split into image files and text files
     const imageFiles = files.filter(f => isImageFile(f));
     const textFiles  = files.filter(f => !isImageFile(f));
 
-    // Read image files as base64 for vision API
     if (imageFiles.length > 0) {
       try {
         for (const imgPath of imageFiles) {
@@ -184,7 +188,6 @@ async function handleAgentCommand(
       }
     }
 
-    // Read text files as before
     if (textFiles.length > 0) {
       try {
         if (textFiles.length === 1) {
@@ -244,7 +247,8 @@ async function handleAgentCommand(
         confidence: undefined,
         confidenceBlock: undefined,
         reviewQueued: false,
-        reviewId: undefined
+        reviewId: undefined,
+        memoriesUsed: 0
       };
     } else {
       response = await runCoreAgent({
@@ -284,8 +288,9 @@ async function handleAgentCommand(
   console.log("");
   console.log("====================================");
   console.log(response.title);
-  if (response.sessionId) {
-    console.log(`Session: ${response.sessionId}`);
+  if (response.sessionId) console.log(`Session: ${response.sessionId}`);
+  if (response.memoriesUsed && response.memoriesUsed > 0) {
+    console.log(`Memory: ${response.memoriesUsed} past context(s) retrieved`);
   }
   console.log("====================================");
   console.log("");
@@ -336,7 +341,6 @@ async function handleAgentCommand(
 
 function printAvailableSkills(options: SkillsCommandOptions = {}) {
   const skills = getAvailableSkills();
-
   const filteredSkills = options.category
     ? skills.filter((skill) => skill.category === options.category)
     : skills;
@@ -349,11 +353,6 @@ function printAvailableSkills(options: SkillsCommandOptions = {}) {
 
   if (filteredSkills.length === 0) {
     console.log("No skills found.");
-    console.log("");
-    console.log("Check that your skill folders exist:");
-    console.log("- finance_skills/");
-    console.log("- data_skills/");
-    console.log("- report_skills/");
     console.log("");
     return;
   }
@@ -453,6 +452,8 @@ program
     printAvailableSkills(options);
   });
 
+// ── Session commands ──────────────────────────────────────────────────────────
+
 const sessionCmd = program
   .command("session")
   .description("Manage conversation sessions");
@@ -490,11 +491,7 @@ sessionCmd
   .description("Clear a saved session by ID")
   .action((sessionId: string) => {
     const cleared = clearSession(sessionId);
-    if (cleared) {
-      console.log(`Session "${sessionId}" cleared.`);
-    } else {
-      console.log(`Session "${sessionId}" not found.`);
-    }
+    console.log(cleared ? `Session "${sessionId}" cleared.` : `Session "${sessionId}" not found.`);
   });
 
 sessionCmd
@@ -510,11 +507,90 @@ sessionCmd
     console.log(`Cleared ${sessions.length} session(s).`);
   });
 
+// ── Memory commands ───────────────────────────────────────────────────────────
+
+const memoryCmd = program
+  .command("memory")
+  .description("Manage long-term memory across sessions");
+
+memoryCmd
+  .command("list")
+  .description("List all stored memories")
+  .option("-c, --category <category>", "Filter by category: preference, insight, pattern, fact")
+  .action((options: { category?: string }) => {
+    const memories = listMemories(options.category as MemoryCategory | undefined);
+
+    console.log("");
+    console.log("====================================");
+    console.log("Long-Term Memory");
+    console.log("====================================");
+    console.log("");
+
+    if (memories.length === 0) {
+      console.log(options.category
+        ? `No memories found in category: ${options.category}`
+        : "No memories stored yet."
+      );
+      console.log("");
+      console.log('Add one: sty-agent memory add "User prefers concise outputs" --category preference');
+      console.log("");
+      return;
+    }
+
+    memories.forEach((m, i) => {
+      const accessed = new Date(m.lastAccessed).toLocaleString();
+      console.log(`${i + 1}. [${m.category}] ${m.key}`);
+      console.log(`   ${m.value}`);
+      console.log(`   ID: ${m.id}  |  Accessed ${m.accessCount}x  |  Last: ${accessed}`);
+      console.log("");
+    });
+
+    console.log(`Total: ${memories.length} memory/memories stored.`);
+    console.log("");
+  });
+
+memoryCmd
+  .command("add <value>")
+  .description("Store a new memory")
+  .option("-k, --key <key>", "Short key/label for this memory (auto-generated if omitted)")
+  .option("-c, --category <category>", "Category: preference, insight, pattern, fact", "fact")
+  .action((value: string, options: { key?: string; category: string }) => {
+    const key = options.key || value.slice(0, 40).toLowerCase().replace(/\s+/g, "-");
+    const memory = storeMemory(options.category as MemoryCategory, key, value);
+    console.log("");
+    console.log(`✔ Memory stored`);
+    console.log(`  Key:      ${memory.key}`);
+    console.log(`  Category: ${memory.category}`);
+    console.log(`  Value:    ${memory.value}`);
+    console.log(`  ID:       ${memory.id}`);
+    console.log("");
+  });
+
+memoryCmd
+  .command("delete <id>")
+  .description("Delete a memory by ID")
+  .action((id: string) => {
+    const deleted = deleteMemory(id);
+    console.log(deleted ? `✔ Memory deleted: ${id}` : `Memory not found: ${id}`);
+    console.log("");
+  });
+
+memoryCmd
+  .command("clear")
+  .description("Clear all stored memories")
+  .action(() => {
+    const count = clearAllMemories();
+    console.log(`✔ Cleared ${count} memory/memories.`);
+    console.log("");
+  });
+
+// ── Agent commands ────────────────────────────────────────────────────────────
+
 program
   .command("ask")
   .description("Ask the general business agent a question")
   .argument("<request>", "Your business request")
-  .option("-f, --file <path>", "Attach a file or image (repeat for multiple: -f file1.csv -f chart.png)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("-f, --file <path>", "Attach a file or image (repeat for multiple)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
   .option("--folder <path>", "Read all supported files from a folder")
   .option("-r, --recursive", "With --folder: also read files in subdirectories")
   .option("--pattern <text>", "With --folder: only include files whose name contains this text")
@@ -529,7 +605,7 @@ program
   .command("finance")
   .description("Run finance-related AI workflows")
   .argument("<request>", "Your finance request")
-  .option("-f, --file <path>", "Attach a file or image (repeat for multiple: -f file1.csv -f chart.png)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("-f, --file <path>", "Attach a file or image (repeat for multiple)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
   .option("--folder <path>", "Read all supported files from a folder")
   .option("-r, --recursive", "With --folder: also read files in subdirectories")
   .option("--pattern <text>", "With --folder: only include files whose name contains this text")
@@ -544,7 +620,7 @@ program
   .command("data")
   .description("Run data analytics AI workflows")
   .argument("<request>", "Your data analytics request")
-  .option("-f, --file <path>", "Attach a file or image (repeat for multiple: -f file1.csv -f chart.png)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("-f, --file <path>", "Attach a file or image (repeat for multiple)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
   .option("--folder <path>", "Read all supported files from a folder")
   .option("-r, --recursive", "With --folder: also read files in subdirectories")
   .option("--pattern <text>", "With --folder: only include files whose name contains this text")
@@ -559,7 +635,7 @@ program
   .command("report")
   .description("Generate business reports and executive summaries")
   .argument("<request>", "Your reporting request")
-  .option("-f, --file <path>", "Attach a file or image (repeat for multiple: -f file1.csv -f chart.png)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("-f, --file <path>", "Attach a file or image (repeat for multiple)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
   .option("--folder <path>", "Read all supported files from a folder")
   .option("-r, --recursive", "With --folder: also read files in subdirectories")
   .option("--pattern <text>", "With --folder: only include files whose name contains this text")
@@ -569,6 +645,8 @@ program
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("report", request, options);
   });
+
+// ── Review commands ───────────────────────────────────────────────────────────
 
 const reviewCmd = program
   .command("review")
@@ -714,6 +792,8 @@ reviewCmd
     console.log("");
   });
 
+// ── Policy command ────────────────────────────────────────────────────────────
+
 program
   .command("policy")
   .description("Show and manage access policy")
@@ -742,6 +822,8 @@ program
     console.log(`Can approve:     ${user.canApproveReviews ? "Yes" : "No"}`);
     console.log("");
   });
+
+// ── RAG commands ──────────────────────────────────────────────────────────────
 
 const ragCmd = program
   .command("rag")
@@ -858,6 +940,8 @@ ragCmd
     }
   });
 
+// ── Usage command ─────────────────────────────────────────────────────────────
+
 program
   .command("usage")
   .description("Show API usage and estimated costs")
@@ -885,15 +969,12 @@ program
     days.forEach(day => {
       if (day.totalCalls === 0) return;
       console.log(`${day.date}  |  ${day.totalCalls} call(s)  |  ~${day.totalInputTokens + day.totalOutputTokens} tokens  |  $${day.totalCostUSD.toFixed(4)}`);
-
       Object.entries(day.byMode).forEach(([mode, stats]) => {
         console.log(`  ${mode.padEnd(8)} ${stats.calls} call(s)  $${stats.costUSD.toFixed(4)}`);
       });
-
       Object.entries(day.byModel).forEach(([model, stats]) => {
         console.log(`  ${model.padEnd(24)} ${stats.calls} call(s)  $${stats.costUSD.toFixed(4)}`);
       });
-
       console.log("");
     });
 
@@ -901,6 +982,8 @@ program
     console.log(`Set DAILY_BUDGET_USD in .env to change the daily limit (current: $${budgetUSD.toFixed(2)})`);
     console.log("");
   });
+
+// ── Logs command ──────────────────────────────────────────────────────────────
 
 program
   .command("logs")
@@ -979,7 +1062,8 @@ program
     console.log("");
   });
 
-// Initialise persistent session database before any command runs
+// ── Boot ──────────────────────────────────────────────────────────────────────
+
 initDb().then(() => {
   program.parseAsync();
 }).catch((err) => {
