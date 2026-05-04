@@ -2,13 +2,44 @@
 
 import { Command } from "commander";
 import { runCoreAgent, type AgentMode } from "./agent/coreAgent.js";
+import { readBusinessFile, buildFilePrompt } from "./tools/fileReader.js";
 
 const program = new Command();
 
-async function handleAgentCommand(mode: AgentMode, userInput: string) {
+interface CommandOptions {
+  file?: string;
+}
+
+async function handleAgentCommand(
+  mode: AgentMode,
+  userInput: string,
+  options: CommandOptions = {}
+) {
+  let finalUserInput = userInput;
+
+  if (options.file) {
+    try {
+      const fileContext = readBusinessFile(options.file);
+      const filePrompt = buildFilePrompt(fileContext);
+
+      finalUserInput = `
+User request:
+${userInput}
+
+${filePrompt}
+`;
+    } catch (error) {
+      console.error("");
+      console.error("File error:");
+      console.error(error instanceof Error ? error.message : "Unknown file error");
+      console.error("");
+      process.exit(1);
+    }
+  }
+
   const response = await runCoreAgent({
     mode,
-    userInput
+    userInput: finalUserInput
   });
 
   console.log("");
@@ -45,32 +76,36 @@ program
   .command("ask")
   .description("Ask the general business agent a question")
   .argument("<request>", "Your business request")
-  .action(async (request: string) => {
-    await handleAgentCommand("general", request);
+  .option("-f, --file <path>", "Attach a local file")
+  .action(async (request: string, options: CommandOptions) => {
+    await handleAgentCommand("general", request, options);
   });
 
 program
   .command("finance")
   .description("Run finance-related AI workflows")
   .argument("<request>", "Your finance request")
-  .action(async (request: string) => {
-    await handleAgentCommand("finance", request);
+  .option("-f, --file <path>", "Attach a local file")
+  .action(async (request: string, options: CommandOptions) => {
+    await handleAgentCommand("finance", request, options);
   });
 
 program
   .command("data")
   .description("Run data analytics AI workflows")
   .argument("<request>", "Your data analytics request")
-  .action(async (request: string) => {
-    await handleAgentCommand("data", request);
+  .option("-f, --file <path>", "Attach a local file")
+  .action(async (request: string, options: CommandOptions) => {
+    await handleAgentCommand("data", request, options);
   });
 
 program
   .command("report")
   .description("Generate business reports and executive summaries")
   .argument("<request>", "Your reporting request")
-  .action(async (request: string) => {
-    await handleAgentCommand("report", request);
+  .option("-f, --file <path>", "Attach a local file")
+  .action(async (request: string, options: CommandOptions) => {
+    await handleAgentCommand("report", request, options);
   });
 
 program.parseAsync();
