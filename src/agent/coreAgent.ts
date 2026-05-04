@@ -1,4 +1,4 @@
-import { callClaude } from "../llm/claudeClient.js";
+import { getLLMClient } from "../llm/llmRouter.js";
 import { buildSkillContext, findRelevantSkills } from "../skills/skillRegistry.js";
 import {
   getSessionHistory,
@@ -142,10 +142,10 @@ function buildNextSteps(mode: AgentMode): string[] {
 }
 
 const MODE_MAX_TOKENS: Record<AgentMode, number> = {
-  general: 2000,
-  finance: 6000,
-  data: 8000,
-  report: 10000
+  general: 5000,
+  finance: 10000,
+  data: 15000,
+  report: 20000
 };
 
 function getMaxTokens(mode: AgentMode): number {
@@ -172,13 +172,10 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
   const usePremiumModel = request.mode === "report";
   const modelName = getModelName(usePremiumModel);
 
-  // Load history if a session ID was provided
   const history = request.sessionId
     ? getSessionHistory(request.sessionId)
     : [];
 
-  // RAG: search knowledge base for relevant context
-  // Enabled by default; set RAG_ENABLED=false in .env to disable
   let ragContext = "";
   if (process.env.RAG_ENABLED !== "false") {
     try {
@@ -194,7 +191,9 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
   }
 
   try {
-    const claudeResponse = await callClaude({
+    // Use the router — works with Claude, OpenAI, or any future provider
+    const llm = getLLMClient();
+    const llmResponse = await llm.complete({
       systemPrompt: finalSystemPrompt,
       userInput: request.userInput,
       usePremiumModel,
@@ -202,40 +201,36 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       history
     });
 
-    // Persist exchange to session
     if (request.sessionId) {
       appendToSession(
         request.sessionId,
         request.mode,
         request.userInput,
-        claudeResponse.text
+        llmResponse.text
       );
     }
 
-    // Record usage for cost tracking
     recordUsage({
       mode: request.mode,
       model: modelName,
       sessionId: request.sessionId,
       inputChars: request.userInput.length,
-      outputChars: claudeResponse.text.length
+      outputChars: llmResponse.text.length
     });
 
-    // Score output confidence
     const confidence = await scoreOutput({
       mode: request.mode,
       userInput: request.userInput,
-      agentOutput: claudeResponse.text
+      agentOutput: llmResponse.text
     });
     const confidenceBlock = formatConfidenceBlock(confidence);
 
-    // Write success log
     writeLog(buildLogEntry({
       mode: request.mode,
       sessionId: request.sessionId,
       model: modelName,
       userInput: request.userInput,
-      output: claudeResponse.text,
+      output: llmResponse.text,
       skillsMatched: matchedSkills,
       status: "success",
       startTime,
@@ -244,7 +239,6 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       confidenceFlags: confidence.flags
     }));
 
-    // Add to review queue if mode + confidence requires it
     let reviewQueued = false;
     let reviewId: string | undefined;
 
@@ -253,19 +247,18 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
         mode: request.mode,
         sessionId: request.sessionId,
         userInput: request.userInput,
-        agentOutput: claudeResponse.text,
+        agentOutput: llmResponse.text,
         confidence
       });
       reviewQueued = true;
       reviewId = queueItem.id;
     }
 
-    // Auto-index this output into the RAG store for future retrieval
     if (process.env.RAG_ENABLED !== "false") {
       autoIndexOutput({
         mode: request.mode,
         userInput: request.userInput,
-        agentOutput: claudeResponse.text,
+        agentOutput: llmResponse.text,
         sessionId: request.sessionId
       });
     }
@@ -273,7 +266,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     return {
       mode: request.mode,
       title: buildTitle(request.mode),
-      summary: claudeResponse.text,
+      summary: llmResponse.text,
       nextSteps: buildNextSteps(request.mode),
       sessionId: request.sessionId,
       confidence,
@@ -285,7 +278,6 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
 
-    // Write error log before re-throwing
     writeLog(buildLogEntry({
       mode: request.mode,
       sessionId: request.sessionId,
