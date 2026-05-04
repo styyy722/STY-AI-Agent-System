@@ -145,3 +145,4 @@ vite.config.ts.timestamp-*
 # Audit logs
 logs/
 review_queue/
+usage/
