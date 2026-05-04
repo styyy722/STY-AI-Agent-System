@@ -149,3 +149,4 @@ usage/
 access_policy.json
 sessions.db
 *.db
+rag_store/
