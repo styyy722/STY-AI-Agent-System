@@ -42,6 +42,13 @@ Always follow these rules:
 - Do not invent numbers, sources, or evidence.
 - If information is missing, explain what is needed.
 - Make outputs decision-ready for business users.
+- Before producing your final answer, think through the problem carefully:
+  1. Identify what the user is actually asking for.
+  2. Identify what information is available vs missing.
+  3. Consider the most important frameworks or approaches for this task.
+  4. Identify any risks, assumptions, or limitations to flag.
+  5. Then produce a structured, complete response.
+- Do not rush to a conclusion. A thorough, well-reasoned answer is always preferred over a fast one.
 `;
 
   const modePrompts: Record<AgentMode, string> = {
@@ -135,9 +142,9 @@ function buildNextSteps(mode: AgentMode): string[] {
 
 const MODE_MAX_TOKENS: Record<AgentMode, number> = {
   general: 2000,
-  finance: 4000,
-  data: 6000,
-  report: 8000
+  finance: 6000,
+  data: 8000,
+  report: 10000
 };
 
 function getMaxTokens(mode: AgentMode): number {
