@@ -223,7 +223,7 @@ sty-agent report "Turn this analysis into a board-ready summary" --file analysis
 
 The project uses skill folders to provide specialist instructions to the agent.
 
-Current skill categories include:
+Skills are organised by business domain:
 
 ```text
 finance_skills/
@@ -231,7 +231,25 @@ data_skills/
 report_skills/
 ```
 
-The skill registry scans available skill folders and loads relevant skill instructions based on the user’s request.
+Each skill folder contains a `SKILL.md` file that explains when the skill should be used, what workflow it supports, and how the agent should structure its response.
+
+The skill registry automatically scans the available skill folders and loads relevant skill instructions based on the user’s request.
+
+---
+
+### Current Skill Categories
+
+| Category | Folder | Purpose |
+|---|---|---|
+| Finance | `finance_skills/` | Finance analysis, WACC, valuation, stock analysis, portfolio analysis, and investment research |
+| Data Analytics | `data_skills/` | EDA, missing value analysis, modelling, feature engineering, and business insights |
+| Reporting | `report_skills/` | Executive summaries, board papers, consulting-style recommendations, and slide-ready insights |
+
+---
+
+### How Skills Are Used
+
+When a user enters a command, the agent checks the request for relevant keywords.
 
 For example:
 
@@ -247,6 +265,78 @@ sty-agent data "Run EDA and handle missing values"
 
 may load a data analytics skill.
 
+```bash
+sty-agent report "Turn this into a board-ready executive summary"
+```
+
+may load an executive reporting skill.
+
+The loaded skill content is added to the Claude system prompt so the agent can produce a more structured and domain-specific response.
+
+---
+
+### List Installed Skills
+
+You can list all installed skills using:
+
+```bash
+sty-agent skills
+```
+
+Filter skills by category:
+
+```bash
+sty-agent skills --category finance
+sty-agent skills --category data
+sty-agent skills --category report
+```
+
+During development, use:
+
+```bash
+npm run dev -- skills
+npm run dev -- skills --category finance
+npm run dev -- skills --category data
+npm run dev -- skills --category report
+```
+
+---
+
+### Example Skill Structure
+
+A typical skill folder looks like this:
+
+```text
+finance_skills/
+└── financial-analyst/
+    └── SKILL.md
+```
+
+The `SKILL.md` file usually contains:
+
+```text
+- Skill name
+- Skill description
+- When to use the skill
+- Required inputs
+- Output structure
+- Quality rules
+- Domain-specific formulas, frameworks, or templates
+```
+
+---
+
+### Planned Skill Improvements
+
+Future improvements may include:
+
+- More advanced finance skills
+- More data analytics and machine learning skills
+- More reporting and presentation skills
+- Skill priority scoring
+- Better skill matching beyond keyword detection
+- Support for custom user-installed skills
+- Support for external tool-based skills with scripts and APIs
 ---
 
 ## Environment Setup
