@@ -100,7 +100,11 @@ const SKILL_ROOTS: SkillRoot[] = [
       // Content signals
       "action plan", "next steps", "risk", "mitigation", "strategic",
       "initiative", "priority", "objective", "outcome", "finding",
-      "write up", "write-up", "document", "draft", "structure"
+      "write up", "write-up", "document", "draft", "structure",
+      // New report types
+      "performance report", "risk report", "business case", "project status",
+      "status report", "project update", "data insights", "insights report",
+      "financial report", "monthly report", "quarterly report", "investment case"
     ]
   }
 ];
@@ -208,6 +212,47 @@ const EXTRA_KEYWORDS_BY_FOLDER: Record<string, string[]> = {
   ],
 
   // --- Report skills ---
+  "financial_performance_report": [
+    "financial performance", "performance report", "monthly report", "quarterly report",
+    "annual report", "management report", "p&l commentary", "p&l report",
+    "budget variance", "actuals vs budget", "revenue commentary", "cost commentary",
+    "margin analysis", "financial results", "period results", "kpi report",
+    "financial review", "management accounts", "board pack", "finance report",
+    "revenue report", "income report", "earnings report", "financial update"
+  ],
+  "risk_report": [
+    "risk report", "risk register", "risk assessment", "risk summary",
+    "risk matrix", "risk rating", "risk appetite", "residual risk",
+    "risk mitigation", "audit committee", "risk register update", "top risks",
+    "operational risk", "regulatory risk", "strategic risk", "reputational risk",
+    "risk and compliance", "control environment", "inherent risk", "risk tier",
+    "risk owner", "risk escalation", "emerging risk", "risk profile"
+  ],
+  "business_case": [
+    "business case", "investment case", "cost benefit", "cost-benefit",
+    "npv analysis", "irr analysis", "payback period", "return on investment",
+    "roi", "build vs buy", "make vs buy", "capex approval", "opex approval",
+    "funding request", "investment approval", "budget approval", "headcount request",
+    "business justification", "strategic case", "feasibility", "proposal",
+    "investment committee", "hurdle rate", "sensitivity analysis", "break even",
+    "justify", "justification", "should we invest", "case for investment"
+  ],
+  "data_insights_report": [
+    "data insights", "insights report", "analysis report", "findings report",
+    "data findings", "analytics report", "present findings", "share findings",
+    "data story", "data narrative", "non-technical audience", "business audience",
+    "explain the data", "what does the data show", "data summary for",
+    "turn analysis into", "package the findings", "communicate the results",
+    "translate the analysis", "write up the analysis", "analysis writeup"
+  ],
+  "project_status_report": [
+    "project status", "status report", "project update", "steering committee",
+    "project report", "programme update", "workstream update", "milestone report",
+    "project progress", "on track", "off track", "amber status", "red status",
+    "project risks", "project issues", "decisions required", "project budget",
+    "project close", "close-out report", "lessons learned", "project sponsor",
+    "traffic light", "rag status", "sprint report", "project dashboard"
+  ],
   "exec_summary_generator": [
     "executive summary", "executive brief", "board summary", "board briefing",
     "write a summary for", "condensed summary", "one page", "one-page",
