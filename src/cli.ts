@@ -2,6 +2,7 @@
 
 import { Command } from "commander";
 import { runCoreAgent, type AgentMode } from "./agent/coreAgent.js";
+import { runMultiAgent, type SubAgentRole } from "./agent/multiAgent.js";
 import {
   readBusinessFile,
   readMultipleFiles,
@@ -67,6 +68,7 @@ interface CommandOptions {
   pattern?: string;       // used with --folder: filter filenames
   output?: string;
   session?: string;
+  deep?: boolean;         // use multi-agent pipeline
 }
 
 interface SkillsCommandOptions {
@@ -183,16 +185,56 @@ ${filePrompt}`;
     }
   }
 
-  const spinner = ora(spinnerLabels[mode] ?? "Thinking...").start();
+  const useDeep = options.deep ?? false;
+  const spinnerLabel = useDeep
+    ? 
+    : spinnerLabels[mode] ?? "Thinking...";
+  const spinner = ora(spinnerLabel).start();
 
   let response;
   try {
-    response = await runCoreAgent({
-      mode,
-      userInput: finalUserInput,
-      sessionId: options.session
-    });
-    spinner.succeed("Done");
+    if (useDeep) {
+      // Multi-agent pipeline
+      const multiResponse = await runMultiAgent({
+        mode,
+        userInput: finalUserInput,
+        sessionId: options.session
+      });
+
+      spinner.succeed();
+
+      // Print step summaries
+      console.log("");
+      multiResponse.steps.forEach((step, i) => {
+        const icon = step.role === "critic" ? "🔍" : step.role === "synthesiser" ? "✨" : step.role === "planner" ? "📋" : step.role === "researcher" ? "📚" : "📊";
+        console.log(`  ${icon} ${step.role.toUpperCase()} (${(step.durationMs/1000).toFixed(1)}s)`);
+      });
+
+      // Adapt multi-agent response to the standard response shape
+      response = {
+        mode: multiResponse.mode,
+        title: `STY Agent — Deep Analysis (${mode} mode)`,
+        summary: multiResponse.finalOutput,
+        nextSteps: [
+          "Review each agent step with: sty-agent deep show (if saved with --output)",
+          "Use --session to continue this analysis in follow-up commands.",
+          "Run without --deep for a faster single-pass response."
+        ],
+        sessionId: multiResponse.sessionId,
+        confidence: undefined,
+        confidenceBlock: undefined,
+        reviewQueued: false,
+        reviewId: undefined
+      };
+    } else {
+      // Standard single-agent pipeline
+      response = await runCoreAgent({
+        mode,
+        userInput: finalUserInput,
+        sessionId: options.session
+      });
+    }
+    if (!useDeep) spinner.succeed("Done");
   } catch (error) {
     spinner.fail("Failed");
     console.error("");
@@ -470,6 +512,7 @@ program
   .option("--pattern <text>", "With --folder: only include files whose name contains this text")
   .option("-o, --output <path>", "Save the agent response to a file")
   .option("-s, --session <id>", "Session ID to maintain conversation history")
+  .option("--deep", "Use multi-agent pipeline: Planner → Analyst → Critic → Synthesiser")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("general", request, options);
   });
@@ -484,6 +527,7 @@ program
   .option("--pattern <text>", "With --folder: only include files whose name contains this text")
   .option("-o, --output <path>", "Save the agent response to a file")
   .option("-s, --session <id>", "Session ID to maintain conversation history")
+  .option("--deep", "Use multi-agent pipeline: Planner → Analyst → Critic → Synthesiser")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("finance", request, options);
   });
@@ -498,6 +542,7 @@ program
   .option("--pattern <text>", "With --folder: only include files whose name contains this text")
   .option("-o, --output <path>", "Save the agent response to a file")
   .option("-s, --session <id>", "Session ID to maintain conversation history")
+  .option("--deep", "Use multi-agent pipeline: Planner → Analyst → Critic → Synthesiser")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("data", request, options);
   });
@@ -512,6 +557,7 @@ program
   .option("--pattern <text>", "With --folder: only include files whose name contains this text")
   .option("-o, --output <path>", "Save the agent response to a file")
   .option("-s, --session <id>", "Session ID to maintain conversation history")
+  .option("--deep", "Use multi-agent pipeline: Planner → Analyst → Critic → Synthesiser")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("report", request, options);
   });
