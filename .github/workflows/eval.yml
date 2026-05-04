@@ -1,0 +1,42 @@
+name: Eval Harness
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+jobs:
+  smoke-test:
+    name: Eval Smoke Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run eval smoke test
+        run: npm run eval
+        env:
+          # Smoke test does not make API calls — no key needed
+          # Set this secret in GitHub → Settings → Secrets if you want to run live eval here
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+      - name: Upload eval results (if any)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results
+          path: tests/evals/results/
+          if-no-files-found: ignore
