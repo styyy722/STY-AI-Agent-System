@@ -9,6 +9,7 @@ import { scoreOutput, formatConfidenceBlock, type ConfidenceResult } from "../to
 import { requiresReview, addToReviewQueue } from "../tools/reviewQueue.js";
 import { recordUsage } from "../tools/costTracker.js";
 import { searchDocuments, buildRagContext, autoIndexOutput } from "../tools/ragStore.js";
+import { queryNeedsWebSearch, searchWeb, formatSearchContext } from "../tools/webSearch.js";
 
 export type AgentMode = "general" | "finance" | "data" | "report";
 
@@ -28,6 +29,7 @@ export interface AgentResponse {
   confidenceBlock?: string;
   reviewQueued?: boolean;
   reviewId?: string;
+  webSearchUsed?: boolean;
 }
 
 export function buildSystemPrompt(mode: AgentMode): string {
@@ -110,7 +112,6 @@ function buildTitle(mode: AgentMode): string {
     data: "STY Agent - Data Analytics Mode",
     report: "STY Agent - Reporting Mode"
   };
-
   return titles[mode];
 }
 
@@ -137,15 +138,14 @@ function buildNextSteps(mode: AgentMode): string[] {
       "Use --output to save the report to a file for sharing or archiving."
     ]
   };
-
   return nextSteps[mode];
 }
 
 const MODE_MAX_TOKENS: Record<AgentMode, number> = {
-  general: 5000,
-  finance: 10000,
-  data: 15000,
-  report: 20000
+  general: 2000,
+  finance: 6000,
+  data: 8000,
+  report: 10000
 };
 
 function getMaxTokens(mode: AgentMode): number {
@@ -176,6 +176,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     ? getSessionHistory(request.sessionId)
     : [];
 
+  // ── RAG: search internal knowledge base ──────────────────────────────────
   let ragContext = "";
   if (process.env.RAG_ENABLED !== "false") {
     try {
@@ -190,12 +191,32 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     }
   }
 
+  // ── WEB SEARCH: fetch live data if the query needs it ────────────────────
+  let webSearchContext = "";
+  let webSearchUsed = false;
+
+  if (queryNeedsWebSearch(request.userInput)) {
+    try {
+      const searchResults = await searchWeb(request.userInput);
+      webSearchContext = formatSearchContext(searchResults);
+      webSearchUsed = true;
+    } catch {
+      // Web search failure must never block the agent
+    }
+  }
+
+  // Combine all context sources into the final user input
+  const enrichedUserInput = [
+    ragContext,
+    webSearchContext,
+    request.userInput
+  ].filter(Boolean).join("\n\n");
+
   try {
-    // Use the router — works with Claude, OpenAI, or any future provider
     const llm = getLLMClient();
     const llmResponse = await llm.complete({
       systemPrompt: finalSystemPrompt,
-      userInput: request.userInput,
+      userInput: enrichedUserInput,
       usePremiumModel,
       maxTokens: getMaxTokens(request.mode),
       history
@@ -272,7 +293,8 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       confidence,
       confidenceBlock,
       reviewQueued,
-      reviewId
+      reviewId,
+      webSearchUsed
     };
 
   } catch (error) {
