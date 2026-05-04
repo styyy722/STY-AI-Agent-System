@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import path from "node:path";
 import { runCoreAgent, type AgentMode } from "./agent/coreAgent.js";
 import { runMultiAgent, type SubAgentRole } from "./agent/multiAgent.js";
 import {
@@ -8,7 +9,10 @@ import {
   readMultipleFiles,
   readFolder,
   buildFilePrompt,
-  buildMultiFilePrompt
+  buildMultiFilePrompt,
+  isImageFile,
+  readImageFile,
+  type ImageAttachment
 } from "./tools/fileReader.js";
 import {
   saveAgentOutput,
@@ -69,13 +73,13 @@ import ora from "ora";
 const program = new Command();
 
 interface CommandOptions {
-  file?: string[];        // repeatable — multiple --file flags
-  folder?: string;        // read entire directory
-  recursive?: boolean;    // used with --folder: read subdirectories
-  pattern?: string;       // used with --folder: filter filenames
+  file?: string[];
+  folder?: string;
+  recursive?: boolean;
+  pattern?: string;
   output?: string;
   session?: string;
-  deep?: boolean;         // use multi-agent pipeline
+  deep?: boolean;
 }
 
 interface SkillsCommandOptions {
@@ -105,6 +109,7 @@ async function handleAgentCommand(
   };
 
   let finalUserInput = userInput;
+  let imageAttachments: ImageAttachment[] = [];
 
   // ── Folder read ──────────────────────────────────────────────────────────
   if (options.folder) {
@@ -128,10 +133,7 @@ async function handleAgentCommand(
       const filePrompt = buildMultiFilePrompt(multiCtx, options.folder);
       console.log(``);
       console.log(`📂 Loaded ${multiCtx.files.length} file(s) from ${options.folder}${multiCtx.skippedFiles.length > 0 ? ` (${multiCtx.skippedFiles.length} skipped)` : ""}`);
-      finalUserInput = `User request:
-${userInput}
-
-${filePrompt}`;
+      finalUserInput = `User request:\n${userInput}\n\n${filePrompt}`;
     } catch (error) {
       console.error("");
       console.error("Folder error:");
@@ -141,16 +143,16 @@ ${filePrompt}`;
     }
   }
 
-  // ── Multiple file read ────────────────────────────────────────────────────
+  // ── File read (text + images) ─────────────────────────────────────────────
   if (!options.folder && options.file && options.file.length > 0) {
     const files = Array.isArray(options.file) ? options.file : [options.file];
 
-    // Access check each file
+    // Access check every file
     for (const f of files) {
       const fileAccess = checkFileAccess(f);
       if (!fileAccess.allowed) {
         console.error("");
-        console.error(`File access denied (): ` + fileAccess.reason);
+        console.error(`File access denied (${f}): ` + fileAccess.reason);
         console.error("");
         process.exit(1);
       }
@@ -161,47 +163,60 @@ ${filePrompt}`;
       }
     }
 
-    try {
-      if (files.length === 1) {
-        // Single file — use original single-file prompt for cleaner output
-        const fileContext = readBusinessFile(files[0]);
-        const filePrompt = buildFilePrompt(fileContext);
-        console.log(``);
-        console.log(`📄 Loaded: ${fileContext.fileName}`);
-        finalUserInput = `User request:
-${userInput}
+    // Split into image files and text files
+    const imageFiles = files.filter(f => isImageFile(f));
+    const textFiles  = files.filter(f => !isImageFile(f));
 
-${filePrompt}`;
-      } else {
-        // Multiple files — use combined prompt
-        const multiCtx = readMultipleFiles(files);
-        const filePrompt = buildMultiFilePrompt(multiCtx, `${files.length} files`);
-        console.log(``);
-        console.log(`📄 Loaded ${multiCtx.files.length} file(s)${multiCtx.skippedFiles.length > 0 ? ` (${multiCtx.skippedFiles.length} skipped)` : ""}`);
-        finalUserInput = `User request:
-${userInput}
-
-${filePrompt}`;
+    // Read image files as base64 for vision API
+    if (imageFiles.length > 0) {
+      try {
+        for (const imgPath of imageFiles) {
+          const attachment = readImageFile(imgPath);
+          imageAttachments.push(attachment);
+          console.log(`🖼  Loaded image: ${path.basename(imgPath)}`);
+        }
+      } catch (error) {
+        console.error("");
+        console.error("Image read error:");
+        console.error(error instanceof Error ? error.message : "Unknown image error");
+        console.error("");
+        process.exit(1);
       }
-    } catch (error) {
-      console.error("");
-      console.error("File error:");
-      console.error(error instanceof Error ? error.message : "Unknown file error");
-      console.error("");
-      process.exit(1);
+    }
+
+    // Read text files as before
+    if (textFiles.length > 0) {
+      try {
+        if (textFiles.length === 1) {
+          const fileContext = readBusinessFile(textFiles[0]);
+          const filePrompt = buildFilePrompt(fileContext);
+          console.log(`📄 Loaded: ${fileContext.fileName}`);
+          finalUserInput = `User request:\n${userInput}\n\n${filePrompt}`;
+        } else {
+          const multiCtx = readMultipleFiles(textFiles);
+          const filePrompt = buildMultiFilePrompt(multiCtx, `${textFiles.length} files`);
+          console.log(`📄 Loaded ${multiCtx.files.length} file(s)${multiCtx.skippedFiles.length > 0 ? ` (${multiCtx.skippedFiles.length} skipped)` : ""}`);
+          finalUserInput = `User request:\n${userInput}\n\n${filePrompt}`;
+        }
+      } catch (error) {
+        console.error("");
+        console.error("File error:");
+        console.error(error instanceof Error ? error.message : "Unknown file error");
+        console.error("");
+        process.exit(1);
+      }
     }
   }
 
   const useDeep = options.deep ?? false;
   const spinnerLabel = useDeep
-    ? 
+    ? "Running deep multi-agent analysis..."
     : spinnerLabels[mode] ?? "Thinking...";
   const spinner = ora(spinnerLabel).start();
 
   let response;
   try {
     if (useDeep) {
-      // Multi-agent pipeline
       const multiResponse = await runMultiAgent({
         mode,
         userInput: finalUserInput,
@@ -210,14 +225,12 @@ ${filePrompt}`;
 
       spinner.succeed();
 
-      // Print step summaries
       console.log("");
-      multiResponse.steps.forEach((step, i) => {
+      multiResponse.steps.forEach((step) => {
         const icon = step.role === "critic" ? "🔍" : step.role === "synthesiser" ? "✨" : step.role === "planner" ? "📋" : step.role === "researcher" ? "📚" : "📊";
         console.log(`  ${icon} ${step.role.toUpperCase()} (${(step.durationMs/1000).toFixed(1)}s)`);
       });
 
-      // Adapt multi-agent response to the standard response shape
       response = {
         mode: multiResponse.mode,
         title: `STY Agent — Deep Analysis (${mode} mode)`,
@@ -234,11 +247,11 @@ ${filePrompt}`;
         reviewId: undefined
       };
     } else {
-      // Standard single-agent pipeline
       response = await runCoreAgent({
         mode,
         userInput: finalUserInput,
-        sessionId: options.session
+        sessionId: options.session,
+        images: imageAttachments.length > 0 ? imageAttachments : undefined
       });
     }
     if (!useDeep) spinner.succeed("Done");
@@ -306,9 +319,7 @@ ${filePrompt}`;
         response.summary,
         response.nextSteps
       );
-
       const savedFile = saveAgentOutput(options.output, savedContent);
-
       console.log("");
       console.log(`Output saved to: ${savedFile.outputPath}`);
     } catch (error) {
@@ -375,21 +386,18 @@ program
 
     let allPassed = true;
 
-    // Check 1: .env file
     const fs = await import("node:fs");
-    const path = await import("node:path");
-    const envPath = path.join(process.cwd(), ".env");
+    const pathMod = await import("node:path");
+    const envPath = pathMod.join(process.cwd(), ".env");
     const envExists = fs.existsSync(envPath);
     console.log(envExists ? "✔ .env file found" : "✖ .env file not found — copy .env.example to .env");
     if (!envExists) allPassed = false;
 
-    // Check 2: API key present
     const apiKey = process.env.ANTHROPIC_API_KEY;
     const keyPresent = !!apiKey && apiKey !== "your_api_key_here";
     console.log(keyPresent ? "✔ ANTHROPIC_API_KEY is set" : "✖ ANTHROPIC_API_KEY is missing or still set to placeholder");
     if (!keyPresent) allPassed = false;
 
-    // Check 3: API key works (live call)
     if (keyPresent) {
       const spinner = ora("Testing API connection...").start();
       try {
@@ -409,7 +417,6 @@ program
       console.log("  Skipping API test — fix the key first");
     }
 
-    // Check 4: Skills loading
     const { getAvailableSkills: getSkills } = await import("./skills/skillRegistry.js");
     const skills = getSkills();
     console.log(
@@ -419,7 +426,6 @@ program
     );
     if (skills.length === 0) allPassed = false;
 
-    // Check 5: Session database
     const dbPath = getDbPath_public();
     const dbExists = fs.existsSync(dbPath);
     console.log(dbExists
@@ -427,12 +433,11 @@ program
       : `✔ Session database will be created at: ${dbPath} (on first use)`
     );
 
-    // Summary
     console.log("");
     if (allPassed) {
       console.log("All checks passed. Your agent is ready to use.");
       console.log("");
-      console.log("Try: sty-agent finance "Explain WACC"");
+      console.log('Try: sty-agent finance "Explain WACC"');
     } else {
       console.log("Some checks failed. Fix the issues above before using the agent.");
       process.exit(1);
@@ -443,15 +448,11 @@ program
 program
   .command("skills")
   .description("List installed agent skills")
-  .option(
-    "-c, --category <category>",
-    "Filter skills by category: finance, data, report, or general"
-  )
+  .option("-c, --category <category>", "Filter skills by category: finance, data, report, or general")
   .action((options: SkillsCommandOptions) => {
     printAvailableSkills(options);
   });
 
-// Session management command
 const sessionCmd = program
   .command("session")
   .description("Manage conversation sessions");
@@ -470,7 +471,7 @@ sessionCmd
     if (sessions.length === 0) {
       console.log("No sessions found.");
       console.log("");
-      console.log("Start a session with: sty-agent finance \"your question\" --session my-session");
+      console.log('Start a session with: sty-agent finance "your question" --session my-session');
       console.log("");
       return;
     }
@@ -513,7 +514,7 @@ program
   .command("ask")
   .description("Ask the general business agent a question")
   .argument("<request>", "Your business request")
-  .option("-f, --file <path>", "Attach a file (repeat for multiple: -f file1.csv -f file2.xlsx)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("-f, --file <path>", "Attach a file or image (repeat for multiple: -f file1.csv -f chart.png)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
   .option("--folder <path>", "Read all supported files from a folder")
   .option("-r, --recursive", "With --folder: also read files in subdirectories")
   .option("--pattern <text>", "With --folder: only include files whose name contains this text")
@@ -528,7 +529,7 @@ program
   .command("finance")
   .description("Run finance-related AI workflows")
   .argument("<request>", "Your finance request")
-  .option("-f, --file <path>", "Attach a file (repeat for multiple: -f file1.csv -f file2.xlsx)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("-f, --file <path>", "Attach a file or image (repeat for multiple: -f file1.csv -f chart.png)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
   .option("--folder <path>", "Read all supported files from a folder")
   .option("-r, --recursive", "With --folder: also read files in subdirectories")
   .option("--pattern <text>", "With --folder: only include files whose name contains this text")
@@ -543,7 +544,7 @@ program
   .command("data")
   .description("Run data analytics AI workflows")
   .argument("<request>", "Your data analytics request")
-  .option("-f, --file <path>", "Attach a file (repeat for multiple: -f file1.csv -f file2.xlsx)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("-f, --file <path>", "Attach a file or image (repeat for multiple: -f file1.csv -f chart.png)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
   .option("--folder <path>", "Read all supported files from a folder")
   .option("-r, --recursive", "With --folder: also read files in subdirectories")
   .option("--pattern <text>", "With --folder: only include files whose name contains this text")
@@ -558,7 +559,7 @@ program
   .command("report")
   .description("Generate business reports and executive summaries")
   .argument("<request>", "Your reporting request")
-  .option("-f, --file <path>", "Attach a file (repeat for multiple: -f file1.csv -f file2.xlsx)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("-f, --file <path>", "Attach a file or image (repeat for multiple: -f file1.csv -f chart.png)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
   .option("--folder <path>", "Read all supported files from a folder")
   .option("-r, --recursive", "With --folder: also read files in subdirectories")
   .option("--pattern <text>", "With --folder: only include files whose name contains this text")
@@ -596,8 +597,7 @@ reviewCmd
       const statusIcon = item.status === "approved" ? "✔" : item.status === "rejected" ? "✖" : "⏳";
       console.log(`${i + 1}. [${statusIcon} ${item.status.toUpperCase()}] ${item.id}`);
       console.log(`   ${time} | ${item.mode} | Confidence: ${item.confidence.tier} (${item.confidence.score}/100)`);
-      console.log(`   Request: ${item.userInput.slice(0, 80).replace(/
-/g, " ")}...`);
+      console.log(`   Request: ${item.userInput.slice(0, 80).replace(/\n/g, " ")}...`);
       if (item.status !== "pending") {
         console.log(`   Reviewed by: ${item.reviewedBy} | ${item.reviewNote ?? ""}`);
       }
@@ -741,9 +741,6 @@ program
     console.log(`Can export:      ${user.canExportOutputs ? "Yes" : "No"}`);
     console.log(`Can approve:     ${user.canApproveReviews ? "Yes" : "No"}`);
     console.log("");
-    console.log("Policy file: " + (require("node:fs").existsSync(require("node:path").join(process.cwd(), "access_policy.json")) ? "access_policy.json (custom)" : "default (no policy file found)"));
-    console.log("Run: sty-agent policy --init  to create a customisable policy file.");
-    console.log("");
   });
 
 const ragCmd = program
@@ -789,8 +786,7 @@ ragCmd
       docs.forEach((d, i) => {
         console.log(`${i + 1}. [${d.category}] ${d.id}`);
         console.log(`   Source: ${d.source} | Indexed: ${new Date(d.indexedAt).toLocaleString()}`);
-        console.log(`   ${d.text.slice(0, 100).replace(/
-/g, " ")}...`);
+        console.log(`   ${d.text.slice(0, 100).replace(/\n/g, " ")}...`);
         console.log("");
       });
     } catch (err) {
@@ -809,7 +805,7 @@ ragCmd
         query,
         topK: parseInt(options.topK),
         category: options.category,
-        minScore: 0.0   // show all results when searching manually
+        minScore: 0.0
       });
       console.log("");
       console.log(`Search: "${query}"`);
@@ -818,8 +814,7 @@ ragCmd
       results.forEach((r, i) => {
         console.log(`${i + 1}. [${(r.score * 100).toFixed(0)}% match] ${r.id}`);
         console.log(`   Source: ${r.source} | Category: ${r.category}`);
-        console.log(`   ${r.text.slice(0, 150).replace(/
-/g, " ")}...`);
+        console.log(`   ${r.text.slice(0, 150).replace(/\n/g, " ")}...`);
         console.log("");
       });
     } catch (err) {
@@ -898,6 +893,7 @@ program
       Object.entries(day.byModel).forEach(([model, stats]) => {
         console.log(`  ${model.padEnd(24)} ${stats.calls} call(s)  $${stats.costUSD.toFixed(4)}`);
       });
+
       console.log("");
     });
 
@@ -912,7 +908,7 @@ program
   .option("-n, --lines <number>", "Number of recent log entries to show", "20")
   .action(async (options: { lines: string }) => {
     const fs = await import("node:fs");
-    const path = await import("node:path");
+    const pathMod = await import("node:path");
     const logDir = getLogDir_public();
     const maxLines = parseInt(options.lines) || 20;
 
@@ -943,10 +939,9 @@ program
 
     const entries: string[] = [];
     for (const file of files) {
-      const filePath = path.join(logDir, file);
+      const filePath = pathMod.join(logDir, file);
       const lines = fs.readFileSync(filePath, "utf-8")
-        .split("
-")
+        .split("\n")
         .filter((l: string) => l.trim());
       entries.unshift(...lines);
       if (entries.length >= maxLines) break;
@@ -954,7 +949,7 @@ program
 
     const recent = entries.slice(-maxLines).reverse();
 
-    recent.forEach((line: string, i: number) => {
+    recent.forEach((line: string) => {
       try {
         const entry = JSON.parse(line);
         const time = new Date(entry.timestamp).toLocaleString();
@@ -963,16 +958,13 @@ program
           ? " [" + entry.skillsMatched.join(", ") + "]"
           : "";
         const duration = (entry.durationMs / 1000).toFixed(1) + "s";
-
         const conf = entry.confidenceTier ? ` | ${entry.confidenceTier} confidence` : "";
         console.log(`${status} ${time} | ${entry.mode} | ${entry.model} | ${duration}${conf}`);
-        console.log(`   Input:  ${entry.inputSummary.slice(0, 100).replace(/
-/g, " ")}`);
+        console.log(`   Input:  ${entry.inputSummary.slice(0, 100).replace(/\n/g, " ")}`);
         if (entry.status === "error") {
           console.log(`   Error:  ${entry.errorMessage}`);
         } else {
-          console.log(`   Output: ${entry.outputSummary.slice(0, 100).replace(/
-/g, " ")}`);
+          console.log(`   Output: ${entry.outputSummary.slice(0, 100).replace(/\n/g, " ")}`);
         }
         if (skills) console.log(`   Skills:${skills}`);
         if (entry.sessionId) console.log(`   Session: ${entry.sessionId}`);
