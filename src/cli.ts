@@ -320,7 +320,7 @@ program
     if (allPassed) {
       console.log("All checks passed. Your agent is ready to use.");
       console.log("");
-      console.log("Try: sty-agent finance "Explain WACC"");
+      console.log('Try: sty-agent finance "Explain WACC"');
     } else {
       console.log("Some checks failed. Fix the issues above before using the agent.");
       process.exit(1);
@@ -468,8 +468,7 @@ reviewCmd
       const statusIcon = item.status === "approved" ? "✔" : item.status === "rejected" ? "✖" : "⏳";
       console.log(`${i + 1}. [${statusIcon} ${item.status.toUpperCase()}] ${item.id}`);
       console.log(`   ${time} | ${item.mode} | Confidence: ${item.confidence.tier} (${item.confidence.score}/100)`);
-      console.log(`   Request: ${item.userInput.slice(0, 80).replace(/
-/g, " ")}...`);
+      console.log(`   Request: ${item.userInput.slice(0, 80).replace(/\n/g, " ")}...`);
       if (item.status !== "pending") {
         console.log(`   Reviewed by: ${item.reviewedBy} | ${item.reviewNote ?? ""}`);
       }
@@ -699,10 +698,10 @@ program
     const entries: string[] = [];
     for (const file of files) {
       const filePath = path.join(logDir, file);
-      const lines = fs.readFileSync(filePath, "utf-8")
-        .split("
-")
-        .filter((l: string) => l.trim());
+      const lines = fs
+          .readFileSync(filePath, "utf-8")
+          .split("\n")
+          .filter((l: string) => l.trim());
       entries.unshift(...lines);
       if (entries.length >= maxLines) break;
     }
@@ -721,13 +720,11 @@ program
 
         const conf = entry.confidenceTier ? ` | ${entry.confidenceTier} confidence` : "";
         console.log(`${status} ${time} | ${entry.mode} | ${entry.model} | ${duration}${conf}`);
-        console.log(`   Input:  ${entry.inputSummary.slice(0, 100).replace(/
-/g, " ")}`);
+        console.log(`   Input:  ${entry.inputSummary.slice(0, 100).replace(/\n/g, " ")}`);
         if (entry.status === "error") {
           console.log(`   Error:  ${entry.errorMessage}`);
         } else {
-          console.log(`   Output: ${entry.outputSummary.slice(0, 100).replace(/
-/g, " ")}`);
+          console.log(`   Output: ${entry.outputSummary.slice(0, 100).replace(/\n/g, " ")}`);
         }
         if (skills) console.log(`   Skills:${skills}`);
         if (entry.sessionId) console.log(`   Session: ${entry.sessionId}`);
