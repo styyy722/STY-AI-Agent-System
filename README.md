@@ -49,3 +49,31 @@ sty-agent finance "Explain WACC for Telstra"
 sty-agent finance "Analyse AAPL stock"
 sty-agent data "Summarise this sales dataset"
 sty-agent report "Write an executive summary"
+
+## How it works
+
+STY-AI-Agent-System/
+├── finance_skills/
+│   ├── finance/
+│   ├── financial-analyst/
+│   ├── investment_advisor/
+│   └── stock_analysis/
+│
+├── src/
+│   ├── agent/
+│   │   └── coreAgent.ts
+│   │
+│   ├── llm/
+│   │   └── claudeClient.ts
+│   │
+│   ├── skills/
+│   │   └── skillRegistry.ts
+│   │
+│   └── cli.ts
+│
+├── .env.example
+├── .gitignore
+├── LICENSE
+├── package.json
+├── README.md
+└── tsconfig.json
