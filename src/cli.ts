@@ -22,6 +22,7 @@ import {
   ApiAuthError,
   ApiError
 } from "./llm/claudeClient.js";
+import ora from "ora";
 
 const program = new Command();
 
@@ -41,6 +42,13 @@ async function handleAgentCommand(
   options: CommandOptions = {}
 ) {
   validateAgentCommand(userInput, options);
+
+  const spinnerLabels: Record<string, string> = {
+    general: "Thinking...",
+    finance: "Running finance analysis...",
+    data: "Analysing data...",
+    report: "Drafting report..."
+  };
 
   let finalUserInput = userInput;
 
@@ -64,6 +72,8 @@ ${filePrompt}
     }
   }
 
+  const spinner = ora(spinnerLabels[mode] ?? "Thinking...").start();
+
   let response;
   try {
     response = await runCoreAgent({
@@ -71,7 +81,9 @@ ${filePrompt}
       userInput: finalUserInput,
       sessionId: options.session
     });
+    spinner.succeed("Done");
   } catch (error) {
+    spinner.fail("Failed");
     console.error("");
     if (error instanceof MissingApiKeyError) {
       console.error("API Key Error:");
