@@ -1,6 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execSync } from "node:child_process";
+import type { ImageAttachment, ImageMediaType } from "../llm/llmInterface.js";
+
+export type { ImageAttachment };
 
 export interface FileContext {
   filePath: string;
@@ -13,15 +16,55 @@ export interface FileContext {
 export interface MultiFileContext {
   files: FileContext[];
   totalFiles: number;
-  skippedFiles: string[];         // files that failed access checks or parsing
+  skippedFiles: string[];
   totalCharacters: number;
-  truncated: boolean;             // true if combined content was cut for context safety
+  truncated: boolean;
 }
 
 const SUPPORTED_EXTENSIONS = [".txt", ".md", ".csv", ".json", ".xlsx", ".pdf"];
-const MAX_FILE_CHARACTERS = 40000;              // per file
-const MAX_TOTAL_CHARACTERS = 120000;            // combined across all files
-const MAX_FILES_PER_FOLDER = 30;               // safety cap on folder reads
+const SUPPORTED_IMAGE_EXTENSIONS = [".png", ".jpg", ".jpeg", ".gif", ".webp"];
+const MAX_FILE_CHARACTERS = 40000;
+const MAX_TOTAL_CHARACTERS = 120000;
+const MAX_FILES_PER_FOLDER = 30;
+
+// Maps file extension to MIME type for vision API calls
+const IMAGE_MEDIA_TYPES: Record<string, ImageMediaType> = {
+  ".png":  "image/png",
+  ".jpg":  "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif":  "image/gif",
+  ".webp": "image/webp"
+};
+
+// Returns true if the file is an image type supported by vision APIs
+export function isImageFile(filePath: string): boolean {
+  return SUPPORTED_IMAGE_EXTENSIONS.includes(
+    path.extname(filePath).toLowerCase()
+  );
+}
+
+// Reads an image file and returns it as a base64 attachment for the vision API
+export function readImageFile(filePath: string): ImageAttachment {
+  const absolutePath = path.resolve(process.cwd(), filePath);
+  const extension = path.extname(absolutePath).toLowerCase();
+
+  if (!fs.existsSync(absolutePath)) {
+    throw new Error(`Image file not found: ${filePath}`);
+  }
+
+  if (!SUPPORTED_IMAGE_EXTENSIONS.includes(extension)) {
+    throw new Error(
+      `Unsupported image type: ${extension}. ` +
+      `Supported image types: ${SUPPORTED_IMAGE_EXTENSIONS.join(", ")}`
+    );
+  }
+
+  const mediaType = IMAGE_MEDIA_TYPES[extension];
+  const buffer = fs.readFileSync(absolutePath);
+  const base64 = buffer.toString("base64");
+
+  return { base64, mediaType };
+}
 
 // ─── Script resolution ────────────────────────────────────────────────────────
 
@@ -136,7 +179,6 @@ export function readMultipleFiles(filePaths: string[]): MultiFileContext {
 
     try {
       const fileCtx = readBusinessFile(filePath);
-      // Check if adding this file would exceed combined limit
       if (totalCharacters + fileCtx.content.length > MAX_TOTAL_CHARACTERS) {
         const remaining = MAX_TOTAL_CHARACTERS - totalCharacters;
         files.push({
@@ -157,21 +199,15 @@ export function readMultipleFiles(filePaths: string[]): MultiFileContext {
     }
   }
 
-  return {
-    files,
-    totalFiles: filePaths.length,
-    skippedFiles,
-    totalCharacters,
-    truncated
-  };
+  return { files, totalFiles: filePaths.length, skippedFiles, totalCharacters, truncated };
 }
 
 // ─── Folder read ──────────────────────────────────────────────────────────────
 
 export interface FolderReadOptions {
-  recursive?: boolean;        // read subdirectories too (default: false)
-  extensions?: string[];      // filter to specific extensions (default: all supported)
-  pattern?: string;           // filter filenames containing this string (case-insensitive)
+  recursive?: boolean;
+  extensions?: string[];
+  pattern?: string;
 }
 
 export function readFolder(folderPath: string, options: FolderReadOptions = {}): MultiFileContext {
@@ -189,22 +225,20 @@ export function readFolder(folderPath: string, options: FolderReadOptions = {}):
   const extensions = options.extensions ?? SUPPORTED_EXTENSIONS;
   const pattern = options.pattern?.toLowerCase();
 
-  // Collect all matching file paths
   function collectFiles(dir: string, depth: number = 0): string[] {
-    if (depth > 3) return []; // safety: max 3 levels deep even in recursive mode
+    if (depth > 3) return [];
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     const collected: string[] = [];
 
     for (const entry of entries) {
-      // Skip hidden files, node_modules, common non-data folders
-      if (entry.name.startsWith(".") ||
-          entry.name === "node_modules" ||
-          entry.name === "dist" ||
-          entry.name === "logs" ||
-          entry.name === "usage" ||
-          entry.name === "review_queue") {
-        continue;
-      }
+      if (
+        entry.name.startsWith(".") ||
+        entry.name === "node_modules" ||
+        entry.name === "dist" ||
+        entry.name === "logs" ||
+        entry.name === "usage" ||
+        entry.name === "review_queue"
+      ) continue;
 
       const fullPath = path.join(dir, entry.name);
 
