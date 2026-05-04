@@ -8,6 +8,7 @@ import { writeLog, buildLogEntry } from "../tools/logger.js";
 import { scoreOutput, formatConfidenceBlock, type ConfidenceResult } from "../tools/confidenceScorer.js";
 import { requiresReview, addToReviewQueue } from "../tools/reviewQueue.js";
 import { recordUsage } from "../tools/costTracker.js";
+import { searchDocuments, buildRagContext, autoIndexOutput } from "../tools/ragStore.js";
 
 export type AgentMode = "general" | "finance" | "data" | "report";
 
@@ -176,6 +177,22 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     ? getSessionHistory(request.sessionId)
     : [];
 
+  // RAG: search knowledge base for relevant context
+  // Enabled by default; set RAG_ENABLED=false in .env to disable
+  let ragContext = "";
+  if (process.env.RAG_ENABLED !== "false") {
+    try {
+      const ragResults = searchDocuments({
+        query: request.userInput,
+        topK: 3,
+        category: request.mode
+      });
+      ragContext = buildRagContext(ragResults);
+    } catch {
+      // RAG failure must never block the agent
+    }
+  }
+
   try {
     const claudeResponse = await callClaude({
       systemPrompt: finalSystemPrompt,
@@ -241,6 +258,16 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       });
       reviewQueued = true;
       reviewId = queueItem.id;
+    }
+
+    // Auto-index this output into the RAG store for future retrieval
+    if (process.env.RAG_ENABLED !== "false") {
+      autoIndexOutput({
+        mode: request.mode,
+        userInput: request.userInput,
+        agentOutput: claudeResponse.text,
+        sessionId: request.sessionId
+      });
     }
 
     return {
