@@ -10,6 +10,8 @@ import { requiresReview, addToReviewQueue } from "../tools/reviewQueue.js";
 import { recordUsage } from "../tools/costTracker.js";
 import { searchDocuments, buildRagContext, autoIndexOutput } from "../tools/ragStore.js";
 import { queryNeedsWebSearch, searchWeb, formatSearchContext } from "../tools/webSearch.js";
+import { extractPythonBlocks } from "../tools/codeExtractor.js";
+import { executePythonCode, formatExecutionResult } from "../tools/codeExecutor.js";
 
 export type AgentMode = "general" | "finance" | "data" | "report";
 
@@ -30,6 +32,7 @@ export interface AgentResponse {
   reviewQueued?: boolean;
   reviewId?: string;
   webSearchUsed?: boolean;
+  codeExecuted?: boolean;
 }
 
 export function buildSystemPrompt(mode: AgentMode): string {
@@ -87,6 +90,9 @@ You specialise in data analytics workflows including:
 - Business recommendations from data
 
 When dealing with analytics tasks, focus on practical business interpretation, not just technical explanation.
+
+IMPORTANT: When writing Python code for analysis, always use print() statements to show your results.
+Write complete, self-contained scripts that include any sample data needed if no file is provided.
 `,
     report: `
 You specialise in professional reporting including:
@@ -205,7 +211,6 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     }
   }
 
-  // Combine all context sources into the final user input
   const enrichedUserInput = [
     ragContext,
     webSearchContext,
@@ -222,12 +227,33 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       history
     });
 
+    // ── CODE EXECUTION: run Python blocks in data mode ────────────────────
+    let finalText = llmResponse.text;
+    let codeExecuted = false;
+    const codeExecutionEnabled = process.env.CODE_EXECUTION_ENABLED === "true";
+
+    if (codeExecutionEnabled && request.mode === "data") {
+      const blocks = extractPythonBlocks(llmResponse.text);
+
+      if (blocks.length > 0) {
+        codeExecuted = true;
+        let executionAppendix = "\n\n═══════════════════════════════════════\n⚙ CODE EXECUTION RESULTS\n═══════════════════════════════════════";
+
+        for (const block of blocks) {
+          const result = await executePythonCode(block.code);
+          executionAppendix += formatExecutionResult(result, block.index);
+        }
+
+        finalText = llmResponse.text + executionAppendix;
+      }
+    }
+
     if (request.sessionId) {
       appendToSession(
         request.sessionId,
         request.mode,
         request.userInput,
-        llmResponse.text
+        finalText
       );
     }
 
@@ -236,13 +262,13 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       model: modelName,
       sessionId: request.sessionId,
       inputChars: request.userInput.length,
-      outputChars: llmResponse.text.length
+      outputChars: finalText.length
     });
 
     const confidence = await scoreOutput({
       mode: request.mode,
       userInput: request.userInput,
-      agentOutput: llmResponse.text
+      agentOutput: finalText
     });
     const confidenceBlock = formatConfidenceBlock(confidence);
 
@@ -251,7 +277,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       sessionId: request.sessionId,
       model: modelName,
       userInput: request.userInput,
-      output: llmResponse.text,
+      output: finalText,
       skillsMatched: matchedSkills,
       status: "success",
       startTime,
@@ -268,7 +294,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
         mode: request.mode,
         sessionId: request.sessionId,
         userInput: request.userInput,
-        agentOutput: llmResponse.text,
+        agentOutput: finalText,
         confidence
       });
       reviewQueued = true;
@@ -279,7 +305,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       autoIndexOutput({
         mode: request.mode,
         userInput: request.userInput,
-        agentOutput: llmResponse.text,
+        agentOutput: finalText,
         sessionId: request.sessionId
       });
     }
@@ -287,14 +313,15 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     return {
       mode: request.mode,
       title: buildTitle(request.mode),
-      summary: llmResponse.text,
+      summary: finalText,
       nextSteps: buildNextSteps(request.mode),
       sessionId: request.sessionId,
       confidence,
       confidenceBlock,
       reviewQueued,
       reviewId,
-      webSearchUsed
+      webSearchUsed,
+      codeExecuted
     };
 
   } catch (error) {
