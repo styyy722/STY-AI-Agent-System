@@ -17,6 +17,13 @@ import {
 } from "./tools/sessionMemory.js";
 import { getLogDir_public } from "./tools/logger.js";
 import {
+  getDailySummary,
+  getWeeklySummary,
+  getDailyBudgetUSD,
+  getDailySpend,
+  getLedgerDir_public
+} from "./tools/costTracker.js";
+import {
   getPendingItems,
   getAllItems,
   approveItem,
@@ -30,7 +37,8 @@ import {
   MissingApiKeyError,
   ApiRateLimitError,
   ApiAuthError,
-  ApiError
+  ApiError,
+  BudgetExceededError
 } from "./llm/claudeClient.js";
 import ora from "ora";
 
@@ -95,7 +103,10 @@ ${filePrompt}
   } catch (error) {
     spinner.fail("Failed");
     console.error("");
-    if (error instanceof MissingApiKeyError) {
+    if (error instanceof BudgetExceededError) {
+      console.error("Budget Exceeded:");
+      console.error(error.message);
+    } else if (error instanceof MissingApiKeyError) {
       console.error("API Key Error:");
       console.error(error.message);
     } else if (error instanceof ApiAuthError) {
@@ -519,6 +530,49 @@ reviewCmd
     }
     console.log("");
     console.log(`✔ Exported approved output to: ${options.output}`);
+    console.log("");
+  });
+
+program
+  .command("usage")
+  .description("Show API usage and estimated costs")
+  .option("-w, --week", "Show the last 7 days")
+  .action((options: { week?: boolean }) => {
+    const budgetUSD = getDailyBudgetUSD();
+    const spentToday = getDailySpend();
+    const remainingUSD = Math.max(0, budgetUSD - spentToday);
+    const pct = Math.min(100, (spentToday / budgetUSD) * 100);
+    const bar = "█".repeat(Math.round(pct / 5)) + "░".repeat(20 - Math.round(pct / 5));
+
+    console.log("");
+    console.log("====================================");
+    console.log("STY Agent — API Usage & Cost");
+    console.log("====================================");
+    console.log("");
+    console.log(`Daily budget:  $${budgetUSD.toFixed(2)}`);
+    console.log(`Spent today:   $${spentToday.toFixed(4)}`);
+    console.log(`Remaining:     $${remainingUSD.toFixed(4)}`);
+    console.log(`               [${bar}] ${pct.toFixed(1)}%`);
+    console.log("");
+
+    const days = options.week ? getWeeklySummary() : [getDailySummary()];
+
+    days.forEach(day => {
+      if (day.totalCalls === 0) return;
+      console.log(`${day.date}  |  ${day.totalCalls} call(s)  |  ~${day.totalInputTokens + day.totalOutputTokens} tokens  |  $${day.totalCostUSD.toFixed(4)}`);
+
+      Object.entries(day.byMode).forEach(([mode, stats]) => {
+        console.log(`  ${mode.padEnd(8)} ${stats.calls} call(s)  $${stats.costUSD.toFixed(4)}`);
+      });
+
+      Object.entries(day.byModel).forEach(([model, stats]) => {
+        console.log(`  ${model.padEnd(24)} ${stats.calls} call(s)  $${stats.costUSD.toFixed(4)}`);
+      });
+      console.log("");
+    });
+
+    console.log(`Usage data: ${getLedgerDir_public()}`);
+    console.log(`Set DAILY_BUDGET_USD in .env to change the daily limit (current: $${budgetUSD.toFixed(2)})`);
     console.log("");
   });
 
