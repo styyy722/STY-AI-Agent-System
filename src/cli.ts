@@ -190,15 +190,27 @@ ${filePrompt}
   }
 
   if (options.output) {
+    if (response.reviewQueued && response.reviewId) {
+      console.log("");
+      console.log("Output was not saved because this response requires review first.");
+      console.log(`Review ID: ${response.reviewId}`);
+      console.log(`Approve with: sty-agent review approve ${response.reviewId}`);
+      console.log(
+        `Then export with: sty-agent review export ${response.reviewId} --output ${options.output}`
+      );
+      console.log("");
+      return;
+    }
+  
     try {
       const savedContent = formatSavedOutputContent(
         response.title,
         response.summary,
         response.nextSteps
       );
-
+  
       const savedFile = saveAgentOutput(options.output, savedContent);
-
+  
       console.log("");
       console.log(`Output saved to: ${savedFile.outputPath}`);
     } catch (error) {
