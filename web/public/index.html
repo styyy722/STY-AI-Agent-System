@@ -25,16 +25,8 @@
       gap: 12px;
     }
 
-    header h1 {
-      font-size: 18px;
-      font-weight: 600;
-      color: #ffffff;
-    }
-
-    header span {
-      font-size: 13px;
-      color: #888;
-    }
+    header h1 { font-size: 18px; font-weight: 600; color: #ffffff; }
+    header span { font-size: 13px; color: #888; }
 
     .mode-bar {
       padding: 10px 24px;
@@ -55,16 +47,8 @@
       transition: all 0.15s;
     }
 
-    .mode-btn.active {
-      background: #1a6cf5;
-      border-color: #1a6cf5;
-      color: #fff;
-    }
-
-    .mode-btn:hover:not(.active) {
-      border-color: #555;
-      color: #ccc;
-    }
+    .mode-btn.active { background: #1a6cf5; border-color: #1a6cf5; color: #fff; }
+    .mode-btn:hover:not(.active) { border-color: #555; color: #ccc; }
 
     #chat {
       flex: 1;
@@ -75,10 +59,7 @@
       gap: 16px;
     }
 
-    .message {
-      max-width: 780px;
-      line-height: 1.6;
-    }
+    .message { max-width: 780px; line-height: 1.6; }
 
     .message.user {
       align-self: flex-end;
@@ -100,10 +81,7 @@
       word-break: break-word;
     }
 
-    .message.agent.loading {
-      color: #666;
-      font-style: italic;
-    }
+    .message.agent.loading { color: #666; font-style: italic; }
 
     .input-area {
       padding: 16px 24px;
@@ -170,7 +148,7 @@
 </header>
 
 <div class="mode-bar">
-  <button class="mode-btn active" data-mode="ask">General</button>
+  <button class="mode-btn active" data-mode="general">General</button>
   <button class="mode-btn" data-mode="finance">Finance</button>
   <button class="mode-btn" data-mode="data">Data</button>
   <button class="mode-btn" data-mode="report">Report</button>
@@ -189,12 +167,11 @@
 </div>
 
 <script>
-  let currentMode = 'ask';
+  let currentMode = 'general';
   const chat = document.getElementById('chat');
   const promptEl = document.getElementById('prompt');
   const sendBtn = document.getElementById('sendBtn');
 
-  // Mode buttons
   document.querySelectorAll('.mode-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
@@ -203,13 +180,11 @@
     });
   });
 
-  // Auto-resize textarea
   promptEl.addEventListener('input', () => {
     promptEl.style.height = 'auto';
     promptEl.style.height = Math.min(promptEl.scrollHeight, 160) + 'px';
   });
 
-  // Send on Enter (Shift+Enter = new line)
   promptEl.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
