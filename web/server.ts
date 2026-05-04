@@ -11,13 +11,9 @@ const PORT = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// This lets the server read JSON from the browser
 app.use(express.json());
-
-// This serves your HTML page from the public folder
 app.use(express.static(path.join(__dirname, 'public')));
 
-// This is the main endpoint — the browser sends a question here
 app.post('/api/ask', async (req, res) => {
   try {
     const { mode, prompt } = req.body;
@@ -26,26 +22,23 @@ app.post('/api/ask', async (req, res) => {
       return res.status(400).json({ error: 'No prompt provided' });
     }
 
-    // Dynamically import your existing core agent
-    const { runAgent } = await import('../src/agent/coreAgent.js');
+    const { runCoreAgent } = await import('../src/agent/coreAgent.js');
 
-    const result = await runAgent({
-      mode: mode || 'ask',
-      prompt,
-      filePath: undefined,
-      outputPath: undefined,
-      useJson: false,
-      showExamples: false,
+    const validModes = ['general', 'finance', 'data', 'report'];
+    const resolvedMode = validModes.includes(mode) ? mode : 'general';
+
+    const result = await runCoreAgent({
+      mode: resolvedMode,
+      userInput: prompt,
     });
 
-    res.json({ response: result });
+    res.json({ response: result.summary });
   } catch (error: any) {
     console.error('Agent error:', error);
     res.status(500).json({ error: error.message || 'Something went wrong' });
   }
 });
 
-// Health check — tells you the server is running
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
