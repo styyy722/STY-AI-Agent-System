@@ -7,6 +7,7 @@ import {
 import { writeLog, buildLogEntry } from "../tools/logger.js";
 import { scoreOutput, formatConfidenceBlock, type ConfidenceResult } from "../tools/confidenceScorer.js";
 import { requiresReview, addToReviewQueue } from "../tools/reviewQueue.js";
+import { recordUsage } from "../tools/costTracker.js";
 
 export type AgentMode = "general" | "finance" | "data" | "report";
 
@@ -186,6 +187,15 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
         claudeResponse.text
       );
     }
+
+    // Record usage for cost tracking
+    recordUsage({
+      mode: request.mode,
+      model: modelName,
+      sessionId: request.sessionId,
+      inputChars: request.userInput.length,
+      outputChars: claudeResponse.text.length
+    });
 
     // Score output confidence
     const confidence = await scoreOutput({
