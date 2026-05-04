@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import "dotenv/config";
 import type { ConversationMessage } from "../tools/sessionMemory.js";
+import { checkBudget } from "../tools/costTracker.js";
 
 export interface ClaudeRequest {
   systemPrompt: string;
@@ -15,6 +16,19 @@ export interface ClaudeResponse {
 }
 
 // Typed error classes so cli.ts can handle each case differently
+export class BudgetExceededError extends Error {
+  constructor(spentUSD: number, budgetUSD: number) {
+    super(
+      `Daily budget exceeded. Spent: $${spentUSD.toFixed(4)} / Limit: $${budgetUSD.toFixed(2)}.
+` +
+      `  Update DAILY_BUDGET_USD in .env to raise the limit, or wait until tomorrow.
+` +
+      `  Run: sty-agent usage to see full spend breakdown.`
+    );
+    this.name = "BudgetExceededError";
+  }
+}
+
 export class MissingApiKeyError extends Error {
   constructor() {
     super(
@@ -55,6 +69,11 @@ const anthropic = new Anthropic({
 export async function callClaude(request: ClaudeRequest): Promise<ClaudeResponse> {
   if (!process.env.ANTHROPIC_API_KEY) {
     throw new MissingApiKeyError();
+  }
+
+  const budget = checkBudget();
+  if (!budget.allowed) {
+    throw new BudgetExceededError(budget.spentUSD, budget.budgetUSD);
   }
 
   const defaultModel = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
