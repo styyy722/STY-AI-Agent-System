@@ -19,12 +19,10 @@ export interface Session {
 
 const MAX_HISTORY_MESSAGES = 20;
 
-// DB file lives in project root — persists across restarts
 function getDbPath(): string {
   return path.join(process.cwd(), "sessions.db");
 }
 
-// Lazy-initialised db instance — one per process
 let _db: any = null;
 let _SQL: any = null;
 
@@ -43,6 +41,7 @@ async function getDb(): Promise<any> {
     _db = new _SQL.Database();
   }
 
+  // Sessions table
   _db.run(`
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
@@ -50,6 +49,19 @@ async function getDb(): Promise<any> {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
       messages TEXT NOT NULL
+    )
+  `);
+
+  // Long-term memory table — NEW
+  _db.run(`
+    CREATE TABLE IF NOT EXISTS long_term_memory (
+      id TEXT PRIMARY KEY,
+      category TEXT NOT NULL,
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      last_accessed TEXT NOT NULL,
+      access_count INTEGER NOT NULL DEFAULT 0
     )
   `);
 
@@ -68,8 +80,6 @@ function persist(): void {
   }
 }
 
-// ─── Sync wrappers (getDb returns cached instance after first await) ──────────
-
 function dbExec(sql: string, params: any[] = []): any[] {
   if (!_db) throw new Error("Database not initialised. Call initDb() first.");
   return _db.exec(sql, params);
@@ -81,7 +91,18 @@ function dbRun(sql: string, params: any[] = []): void {
   persist();
 }
 
-// ─── Public init — call once at startup ───────────────────────────────────────
+// ─── Internal helpers exported for memoryManager.ts ──────────────────────────
+// These share the same db instance — do not use outside src/tools/
+
+export function dbExec_internal(sql: string, params: any[] = []): any[] {
+  return dbExec(sql, params);
+}
+
+export function dbRun_internal(sql: string, params: any[] = []): void {
+  return dbRun(sql, params);
+}
+
+// ─── Public init ──────────────────────────────────────────────────────────────
 
 export async function initDb(): Promise<void> {
   await getDb();
