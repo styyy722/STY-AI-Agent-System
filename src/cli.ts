@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
+import fs from "node:fs";
+import path from "node:path";
 import { runCoreAgent, type AgentMode } from "./agent/coreAgent.js";
 import { readBusinessFile, buildFilePrompt } from "./tools/fileReader.js";
 import {
