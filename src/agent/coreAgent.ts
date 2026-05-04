@@ -12,6 +12,7 @@ import { searchDocuments, buildRagContext, autoIndexOutput } from "../tools/ragS
 import { queryNeedsWebSearch, searchWeb, formatSearchContext } from "../tools/webSearch.js";
 import { extractPythonBlocks } from "../tools/codeExtractor.js";
 import { executePythonCode, formatExecutionResult } from "../tools/codeExecutor.js";
+import type { ImageAttachment } from "../llm/llmInterface.js";
 
 export type AgentMode = "general" | "finance" | "data" | "report";
 
@@ -19,6 +20,7 @@ export interface AgentRequest {
   mode: AgentMode;
   userInput: string;
   sessionId?: string;
+  images?: ImageAttachment[];   // NEW: optional image attachments
 }
 
 export interface AgentResponse {
@@ -148,10 +150,10 @@ function buildNextSteps(mode: AgentMode): string[] {
 }
 
 const MODE_MAX_TOKENS: Record<AgentMode, number> = {
-  general: 2000,
-  finance: 6000,
-  data: 8000,
-  report: 10000
+  general: 10000,
+  finance: 15000,
+  data: 20000,
+  report: 20000
 };
 
 function getMaxTokens(mode: AgentMode): number {
@@ -182,7 +184,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     ? getSessionHistory(request.sessionId)
     : [];
 
-  // ── RAG: search internal knowledge base ──────────────────────────────────
+  // ── RAG ──────────────────────────────────────────────────────────────────
   let ragContext = "";
   if (process.env.RAG_ENABLED !== "false") {
     try {
@@ -197,7 +199,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     }
   }
 
-  // ── WEB SEARCH: fetch live data if the query needs it ────────────────────
+  // ── WEB SEARCH ───────────────────────────────────────────────────────────
   let webSearchContext = "";
   let webSearchUsed = false;
 
@@ -224,10 +226,11 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       userInput: enrichedUserInput,
       usePremiumModel,
       maxTokens: getMaxTokens(request.mode),
-      history
+      history,
+      images: request.images    // ← pass images through to the LLM
     });
 
-    // ── CODE EXECUTION: run Python blocks in data mode ────────────────────
+    // ── CODE EXECUTION ───────────────────────────────────────────────────
     let finalText = llmResponse.text;
     let codeExecuted = false;
     const codeExecutionEnabled = process.env.CODE_EXECUTION_ENABLED === "true";
