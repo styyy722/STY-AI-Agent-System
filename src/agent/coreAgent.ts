@@ -12,6 +12,7 @@ import { searchDocuments, buildRagContext, autoIndexOutput } from "../tools/ragS
 import { extractPythonBlocks } from "../tools/codeExtractor.js";
 import { executePythonCode, formatExecutionResult } from "../tools/codeExecutor.js";
 import { runRelevantTools, buildToolsSystemContext } from "../tools/toolRegistry.js";
+import { retrieveRelevantMemories, buildMemoryContext, autoStoreActivity } from "../tools/memoryManager.js";
 import type { ImageAttachment } from "../llm/llmInterface.js";
 
 export type AgentMode = "general" | "finance" | "data" | "report";
@@ -35,6 +36,7 @@ export interface AgentResponse {
   reviewId?: string;
   toolsUsed?: string[];
   codeExecuted?: boolean;
+  memoriesUsed?: number;
 }
 
 export function buildSystemPrompt(mode: AgentMode, toolsContext?: string): string {
@@ -151,10 +153,10 @@ function buildNextSteps(mode: AgentMode): string[] {
 }
 
 const MODE_MAX_TOKENS: Record<AgentMode, number> = {
-  general: 10000,
-  finance: 20000,
-  data: 20000,
-  report: 20000
+  general: 6000,
+  finance: 18000,
+  data: 24000,
+  report: 30000
 };
 
 function getMaxTokens(mode: AgentMode): number {
@@ -173,13 +175,30 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
   const skillContext = buildSkillContext(request.userInput);
   const matchedSkills = findRelevantSkills(request.userInput).map(s => s.name);
 
+  // ── Long-term memory: retrieve relevant past context ─────────────────────
+  let memoryContext = "";
+  let memoriesUsed = 0;
+
+  if (process.env.MEMORY_ENABLED !== "false") {
+    try {
+      const memories = retrieveRelevantMemories(request.userInput, 5);
+      memoriesUsed = memories.length;
+      memoryContext = buildMemoryContext(memories);
+    } catch {
+      // Memory failure must never block the agent
+    }
+  }
+
   // ── Tool registry: get descriptions for system prompt ────────────────────
   const toolsSystemContext = await buildToolsSystemContext();
   const baseSystemPrompt = buildSystemPrompt(request.mode, toolsSystemContext);
 
-  const finalSystemPrompt = skillContext
-    ? `${baseSystemPrompt}\n\n${skillContext}`
-    : baseSystemPrompt;
+  // Inject memory context into system prompt when available
+  const finalSystemPrompt = [
+    baseSystemPrompt,
+    memoryContext,
+    skillContext
+  ].filter(Boolean).join("\n\n");
 
   const usePremiumModel = request.mode === "report";
   const modelName = getModelName(usePremiumModel);
@@ -203,7 +222,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     }
   }
 
-  // ── Plugin tools: run all relevant tools pre-LLM ─────────────────────────
+  // ── Plugin tools ─────────────────────────────────────────────────────────
   let toolsOutput = "";
   let toolsUsed: string[] = [];
 
@@ -219,7 +238,6 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     // Tool failure must never block the agent
   }
 
-  // Combine all context sources
   const enrichedUserInput = [
     ragContext,
     toolsOutput,
@@ -237,7 +255,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       images: request.images
     });
 
-    // ── Code execution (post-LLM, data mode only) ─────────────────────────
+    // ── Code execution ────────────────────────────────────────────────────
     let finalText = llmResponse.text;
     let codeExecuted = false;
     const codeExecutionEnabled = process.env.CODE_EXECUTION_ENABLED === "true";
@@ -320,6 +338,11 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       });
     }
 
+    // ── Auto-store activity in long-term memory ───────────────────────────
+    if (process.env.MEMORY_ENABLED !== "false") {
+      autoStoreActivity(request.mode, request.userInput, finalText);
+    }
+
     return {
       mode: request.mode,
       title: buildTitle(request.mode),
@@ -331,7 +354,8 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       reviewQueued,
       reviewId,
       toolsUsed,
-      codeExecuted
+      codeExecuted,
+      memoriesUsed
     };
 
   } catch (error) {
