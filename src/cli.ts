@@ -614,7 +614,13 @@ program
     console.log(`Can export:      ${user.canExportOutputs ? "Yes" : "No"}`);
     console.log(`Can approve:     ${user.canApproveReviews ? "Yes" : "No"}`);
     console.log("");
-    console.log("Policy file: " + (require("node:fs").existsSync(require("node:path").join(process.cwd(), "access_policy.json")) ? "access_policy.json (custom)" : "default (no policy file found)"));
+    const policyPath = path.join(process.cwd(), "access_policy.json");
+
+    const policyLabel = fs.existsSync(policyPath)
+      ? "access_policy.json (custom)"
+      : "default (no policy file found)";
+
+    console.log(`Policy file: ${policyLabel}`);
     console.log("Run: sty-agent policy --init  to create a customisable policy file.");
     console.log("");
   });
