@@ -1,30 +1,28 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import fs from "node:fs";
-import path from "node:path";
-import os from "node:os";
+import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import {
   appendToSession,
   loadSession,
   clearSession,
   getSessionHistory,
-  listSessions
+  listSessions,
+  initDb
 } from "../tools/sessionMemory.js";
 
-// Use a unique test session prefix to avoid colliding with real sessions
+// Unique prefix per test run to avoid collisions
 const TEST_PREFIX = `test-${Date.now()}`;
-const SESSION_DIR = path.join(os.tmpdir(), "sty-agent-sessions");
 
 function testId(suffix: string): string {
   return `${TEST_PREFIX}-${suffix}`;
 }
 
+beforeAll(async () => {
+  await initDb();
+});
+
 afterEach(() => {
-  // Clean up all test sessions after each test
-  if (fs.existsSync(SESSION_DIR)) {
-    fs.readdirSync(SESSION_DIR)
-      .filter(f => f.startsWith(TEST_PREFIX))
-      .forEach(f => fs.unlinkSync(path.join(SESSION_DIR, f)));
-  }
+  // Clean up test sessions from the database
+  const all = listSessions();
+  all.filter(s => s.id.startsWith(TEST_PREFIX)).forEach(s => clearSession(s.id));
 });
 
 describe("appendToSession + loadSession", () => {
@@ -63,7 +61,6 @@ describe("appendToSession + loadSession", () => {
       appendToSession(id, "general", `Question ${i}`, `Answer ${i}`);
     }
     const session = loadSession(id);
-    // 12 turns = 24 messages, trimmed to 20
     expect(session!.messages.length).toBeLessThanOrEqual(20);
   });
 
@@ -74,31 +71,38 @@ describe("appendToSession + loadSession", () => {
     }
     const session = loadSession(id);
     const lastMsg = session!.messages[session!.messages.length - 1];
-    expect(lastMsg.content).toBe("A11"); // most recent answer preserved
+    expect(lastMsg.content).toBe("A11");
+  });
+
+  it("persists session data (survives a second loadSession call)", () => {
+    const id = testId("persist");
+    appendToSession(id, "report", "Draft a summary", "Here is the summary.");
+    // Load it again — simulates a second command in the same process
+    const reloaded = loadSession(id);
+    expect(reloaded).not.toBeNull();
+    expect(reloaded!.messages).toHaveLength(2);
+    expect(reloaded!.messages[0].content).toBe("Draft a summary");
   });
 });
 
 describe("getSessionHistory", () => {
   it("returns empty array for non-existent session", () => {
-    const history = getSessionHistory("does-not-exist-xyz");
-    expect(history).toEqual([]);
+    expect(getSessionHistory("does-not-exist-xyz")).toEqual([]);
   });
 
   it("returns messages for an existing session", () => {
     const id = testId("history");
     appendToSession(id, "report", "Write a summary", "Here is the summary.");
-    const history = getSessionHistory(id);
-    expect(history).toHaveLength(2);
+    expect(getSessionHistory(id)).toHaveLength(2);
   });
 });
 
 describe("clearSession", () => {
-  it("returns true and removes the session file", () => {
+  it("returns true and removes the session", () => {
     const id = testId("clear");
     appendToSession(id, "data", "Q", "A");
     expect(loadSession(id)).not.toBeNull();
-    const cleared = clearSession(id);
-    expect(cleared).toBe(true);
+    expect(clearSession(id)).toBe(true);
     expect(loadSession(id)).toBeNull();
   });
 
@@ -113,9 +117,19 @@ describe("listSessions", () => {
     const id2 = testId("list-b");
     appendToSession(id1, "finance", "Q1", "A1");
     appendToSession(id2, "data", "Q2", "A2");
-    appendToSession(id1, "finance", "Q3", "A3"); // id1 updated more recently
+    appendToSession(id1, "finance", "Q3", "A3");
 
     const sessions = listSessions().filter(s => s.id.startsWith(TEST_PREFIX));
-    expect(sessions[0].id).toBe(id1); // most recently updated first
+    expect(sessions[0].id).toBe(id1);
+  });
+
+  it("includes session metadata", () => {
+    const id = testId("meta");
+    appendToSession(id, "finance", "Q", "A");
+    const sessions = listSessions().filter(s => s.id === id);
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0].mode).toBe("finance");
+    expect(sessions[0].createdAt).toBeTruthy();
+    expect(sessions[0].updatedAt).toBeTruthy();
   });
 });
