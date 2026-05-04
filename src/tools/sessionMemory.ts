@@ -1,6 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import os from "node:os";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
 
 export interface ConversationMessage {
   role: "user" | "assistant";
@@ -15,39 +17,111 @@ export interface Session {
   messages: ConversationMessage[];
 }
 
-const SESSION_DIR = path.join(os.tmpdir(), "sty-agent-sessions");
-const MAX_HISTORY_MESSAGES = 20; // keep last 10 turns (user + assistant pairs)
+const MAX_HISTORY_MESSAGES = 20;
 
-function getSessionPath(sessionId: string): string {
-  return path.join(SESSION_DIR, `${sessionId}.json`);
+// DB file lives in project root — persists across restarts
+function getDbPath(): string {
+  return path.join(process.cwd(), "sessions.db");
 }
 
-function ensureSessionDir(): void {
-  if (!fs.existsSync(SESSION_DIR)) {
-    fs.mkdirSync(SESSION_DIR, { recursive: true });
+// Lazy-initialised db instance — one per process
+let _db: any = null;
+let _SQL: any = null;
+
+async function getDb(): Promise<any> {
+  if (_db) return _db;
+
+  const initSqlJs = require("sql.js");
+  _SQL = await initSqlJs();
+
+  const dbPath = getDbPath();
+
+  if (fs.existsSync(dbPath)) {
+    const fileBuffer = fs.readFileSync(dbPath);
+    _db = new _SQL.Database(fileBuffer);
+  } else {
+    _db = new _SQL.Database();
+  }
+
+  _db.run(`
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      mode TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      messages TEXT NOT NULL
+    )
+  `);
+
+  persist();
+  return _db;
+}
+
+function persist(): void {
+  if (!_db) return;
+  try {
+    const data = _db.export();
+    const buffer = Buffer.from(data);
+    fs.writeFileSync(getDbPath(), buffer);
+  } catch {
+    // Never crash the agent over a persist failure
   }
 }
+
+// ─── Sync wrappers (getDb returns cached instance after first await) ──────────
+
+function dbExec(sql: string, params: any[] = []): any[] {
+  if (!_db) throw new Error("Database not initialised. Call initDb() first.");
+  return _db.exec(sql, params);
+}
+
+function dbRun(sql: string, params: any[] = []): void {
+  if (!_db) throw new Error("Database not initialised. Call initDb() first.");
+  _db.run(sql, params);
+  persist();
+}
+
+// ─── Public init — call once at startup ───────────────────────────────────────
+
+export async function initDb(): Promise<void> {
+  await getDb();
+}
+
+// ─── Session operations ───────────────────────────────────────────────────────
 
 export function loadSession(sessionId: string): Session | null {
-  const sessionPath = getSessionPath(sessionId);
-
-  if (!fs.existsSync(sessionPath)) {
-    return null;
-  }
-
   try {
-    const raw = fs.readFileSync(sessionPath, "utf-8");
-    return JSON.parse(raw) as Session;
+    const result = dbExec(
+      "SELECT id, mode, created_at, updated_at, messages FROM sessions WHERE id = ?",
+      [sessionId]
+    );
+
+    if (!result.length || !result[0].values.length) return null;
+
+    const [id, mode, createdAt, updatedAt, messagesJson] = result[0].values[0];
+    return {
+      id: id as string,
+      mode: mode as string,
+      createdAt: createdAt as string,
+      updatedAt: updatedAt as string,
+      messages: JSON.parse(messagesJson as string)
+    };
   } catch {
     return null;
   }
 }
 
 export function saveSession(session: Session): void {
-  ensureSessionDir();
-  const sessionPath = getSessionPath(session.id);
   session.updatedAt = new Date().toISOString();
-  fs.writeFileSync(sessionPath, JSON.stringify(session, null, 2), "utf-8");
+  dbRun(
+    `INSERT INTO sessions (id, mode, created_at, updated_at, messages)
+     VALUES (?, ?, ?, ?, ?)
+     ON CONFLICT(id) DO UPDATE SET
+       mode = excluded.mode,
+       updated_at = excluded.updated_at,
+       messages = excluded.messages`,
+    [session.id, session.mode, session.createdAt, session.updatedAt, JSON.stringify(session.messages)]
+  );
 }
 
 export function appendToSession(
@@ -71,7 +145,6 @@ export function appendToSession(
     { role: "assistant", content: assistantMessage }
   );
 
-  // Trim to keep context window manageable - keep most recent messages
   if (session.messages.length > MAX_HISTORY_MESSAGES) {
     session.messages = session.messages.slice(-MAX_HISTORY_MESSAGES);
   }
@@ -81,35 +154,36 @@ export function appendToSession(
 }
 
 export function clearSession(sessionId: string): boolean {
-  const sessionPath = getSessionPath(sessionId);
-
-  if (!fs.existsSync(sessionPath)) {
-    return false;
-  }
-
-  fs.unlinkSync(sessionPath);
+  const existing = loadSession(sessionId);
+  if (!existing) return false;
+  dbRun("DELETE FROM sessions WHERE id = ?", [sessionId]);
   return true;
 }
 
 export function getSessionHistory(sessionId: string): ConversationMessage[] {
-  const session = loadSession(sessionId);
-  return session?.messages ?? [];
+  return loadSession(sessionId)?.messages ?? [];
 }
 
 export function listSessions(): Session[] {
-  ensureSessionDir();
+  try {
+    const result = dbExec(
+      "SELECT id, mode, created_at, updated_at, messages FROM sessions ORDER BY updated_at DESC"
+    );
 
-  return fs
-    .readdirSync(SESSION_DIR)
-    .filter((f) => f.endsWith(".json"))
-    .map((f) => {
-      try {
-        const raw = fs.readFileSync(path.join(SESSION_DIR, f), "utf-8");
-        return JSON.parse(raw) as Session;
-      } catch {
-        return null;
-      }
-    })
-    .filter((s): s is Session => s !== null)
-    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    if (!result.length) return [];
+
+    return result[0].values.map(([id, mode, createdAt, updatedAt, messagesJson]: any[]) => ({
+      id: id as string,
+      mode: mode as string,
+      createdAt: createdAt as string,
+      updatedAt: updatedAt as string,
+      messages: JSON.parse(messagesJson as string)
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export function getDbPath_public(): string {
+  return getDbPath();
 }
