@@ -1,196 +1,71 @@
-#!/usr/bin/env node
+import Anthropic from "@anthropic-ai/sdk";
+import "dotenv/config";
+import type { ConversationMessage } from "../tools/sessionMemory.js";
 
-import { Command } from "commander";
-import { runCoreAgent, type AgentMode } from "./agent/coreAgent.js";
-import { readBusinessFile, buildFilePrompt } from "./tools/fileReader.js";
-import {
-  saveAgentOutput,
-  formatSavedOutputContent
-} from "./tools/outputWriter.js";
-import {
-  getAvailableSkills,
-  type SkillCategory
-} from "./skills/skillRegistry.js";
-
-const program = new Command();
-
-interface CommandOptions {
-  file?: string;
-  output?: string;
+export interface ClaudeRequest {
+  systemPrompt: string;
+  userInput: string;
+  usePremiumModel?: boolean;
+  maxTokens?: number;
+  history?: ConversationMessage[];
 }
 
-interface SkillsCommandOptions {
-  category?: SkillCategory;
+export interface ClaudeResponse {
+  text: string;
 }
 
-async function handleAgentCommand(
-  mode: AgentMode,
-  userInput: string,
-  options: CommandOptions = {}
-) {
-  let finalUserInput = userInput;
+const anthropic = new Anthropic({
+  apiKey: process.env.ANTHROPIC_API_KEY
+});
 
-  if (options.file) {
-    try {
-      const fileContext = readBusinessFile(options.file);
-      const filePrompt = buildFilePrompt(fileContext);
+export async function callClaude(request: ClaudeRequest): Promise<ClaudeResponse> {
+  const defaultModel = process.env.ANTHROPIC_MODEL || "claude-sonnet-4-6";
+  const premiumModel = process.env.ANTHROPIC_MODEL_PREMIUM || "claude-opus-4-7";
+  const model = request.usePremiumModel ? premiumModel : defaultModel;
 
-      finalUserInput = `
-User request:
-${userInput}
+  const agentStyle = process.env.AGENT_STYLE || "professional";
+  const outputFormat = process.env.OUTPUT_FORMAT || "markdown";
+  const enrichedSystemPrompt = `${request.systemPrompt}\n\nResponse style: ${agentStyle}.\nOutput format: ${outputFormat}.`;
 
-${filePrompt}
-`;
-    } catch (error) {
-      console.error("");
-      console.error("File error:");
-      console.error(error instanceof Error ? error.message : "Unknown file error");
-      console.error("");
-      process.exit(1);
-    }
+  if (!process.env.ANTHROPIC_API_KEY) {
+    return {
+      text: "Claude API key is missing. Please create a .env file and add ANTHROPIC_API_KEY=your_api_key_here."
+    };
   }
 
-  const response = await runCoreAgent({
-    mode,
-    userInput: finalUserInput
-  });
+  // Build message list: prior history + current user message
+  const messages: Anthropic.MessageParam[] = [
+    ...(request.history ?? []).map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content
+    })),
+    { role: "user", content: request.userInput }
+  ];
 
-  console.log("");
-  console.log("====================================");
-  console.log(response.title);
-  console.log("====================================");
-  console.log("");
-  console.log(response.summary);
-  console.log("");
-
-  if (response.nextSteps.length > 0) {
-    console.log("Next steps:");
-    response.nextSteps.forEach((step, index) => {
-      console.log(`${index + 1}. ${step}`);
+  try {
+    const message = await anthropic.messages.create({
+      model,
+      max_tokens: request.maxTokens ?? parseInt(process.env.MAX_TOKENS || "0") || 4000,
+      system: enrichedSystemPrompt,
+      messages
     });
+
+    const text = message.content
+      .map((block) => {
+        if (block.type === "text") {
+          return block.text;
+        }
+        return "";
+      })
+      .join("\n")
+      .trim();
+
+    return {
+      text: text || "Claude returned an empty response."
+    };
+  } catch (error) {
+    return {
+      text: `Claude API error: ${error instanceof Error ? error.message : "Unknown error"}`
+    };
   }
-
-  if (options.output) {
-    try {
-      const savedContent = formatSavedOutputContent(
-        response.title,
-        response.summary,
-        response.nextSteps
-      );
-
-      const savedFile = saveAgentOutput(options.output, savedContent);
-
-      console.log("");
-      console.log(`Output saved to: ${savedFile.outputPath}`);
-    } catch (error) {
-      console.error("");
-      console.error("Output save error:");
-      console.error(error instanceof Error ? error.message : "Unknown output error");
-      console.error("");
-      process.exit(1);
-    }
-  }
-
-  console.log("");
 }
-
-function printAvailableSkills(options: SkillsCommandOptions = {}) {
-  const skills = getAvailableSkills();
-
-  const filteredSkills = options.category
-    ? skills.filter((skill) => skill.category === options.category)
-    : skills;
-
-  console.log("");
-  console.log("====================================");
-  console.log("Installed STY Agent Skills");
-  console.log("====================================");
-  console.log("");
-
-  if (filteredSkills.length === 0) {
-    console.log("No skills found.");
-    console.log("");
-    console.log("Check that your skill folders exist:");
-    console.log("- finance_skills/");
-    console.log("- data_skills/");
-    console.log("- report_skills/");
-    console.log("");
-    return;
-  }
-
-  filteredSkills.forEach((skill, index) => {
-    console.log(`${index + 1}. ${skill.name}`);
-    console.log(`   Category: ${skill.category}`);
-    console.log(`   Folder: ${skill.rootFolder}/${skill.folder}`);
-    console.log(`   Description: ${skill.description}`);
-    console.log("");
-  });
-
-  console.log(`Total skills found: ${filteredSkills.length}`);
-  console.log("");
-}
-
-program
-  .name("sty-agent")
-  .description("A Claude-powered AI business agent for finance, data analytics, and reporting workflows.")
-  .version("0.1.0");
-
-program
-  .command("hello")
-  .description("Test whether the agent is working")
-  .action(() => {
-    console.log("Hello! STY AI Agent System is working.");
-  });
-
-program
-  .command("skills")
-  .description("List installed agent skills")
-  .option(
-    "-c, --category <category>",
-    "Filter skills by category: finance, data, report, or general"
-  )
-  .action((options: SkillsCommandOptions) => {
-    printAvailableSkills(options);
-  });
-
-program
-  .command("ask")
-  .description("Ask the general business agent a question")
-  .argument("<request>", "Your business request")
-  .option("-f, --file <path>", "Attach a local file")
-  .option("-o, --output <path>", "Save the agent response to a file")
-  .action(async (request: string, options: CommandOptions) => {
-    await handleAgentCommand("general", request, options);
-  });
-
-program
-  .command("finance")
-  .description("Run finance-related AI workflows")
-  .argument("<request>", "Your finance request")
-  .option("-f, --file <path>", "Attach a local file")
-  .option("-o, --output <path>", "Save the agent response to a file")
-  .action(async (request: string, options: CommandOptions) => {
-    await handleAgentCommand("finance", request, options);
-  });
-
-program
-  .command("data")
-  .description("Run data analytics AI workflows")
-  .argument("<request>", "Your data analytics request")
-  .option("-f, --file <path>", "Attach a local file")
-  .option("-o, --output <path>", "Save the agent response to a file")
-  .action(async (request: string, options: CommandOptions) => {
-    await handleAgentCommand("data", request, options);
-  });
-
-program
-  .command("report")
-  .description("Generate business reports and executive summaries")
-  .argument("<request>", "Your reporting request")
-  .option("-f, --file <path>", "Attach a local file")
-  .option("-o, --output <path>", "Save the agent response to a file")
-  .action(async (request: string, options: CommandOptions) => {
-    await handleAgentCommand("report", request, options);
-  });
-
-program.parseAsync();
