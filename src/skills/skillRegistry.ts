@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-export type SkillCategory = "finance" | "data" | "report" | "general";
+export type SkillCategory = "finance" | "data" | "report" | "pbi" | "general";
 
 export interface AgentSkill {
   name: string;
@@ -105,6 +105,29 @@ const SKILL_ROOTS: SkillRoot[] = [
       "performance report", "risk report", "business case", "project status",
       "status report", "project update", "data insights", "insights report",
       "financial report", "monthly report", "quarterly report", "investment case"
+    ]
+  },
+  {
+    category: "pbi",
+    rootFolder: "PBI_skills",
+    fallbackKeywords: [
+      "power bi",
+      "pbi",
+      "dax",
+      "dashboard",
+      "semantic model",
+      "data model",
+      "measure",
+      "visualisation",
+      "visualization",
+      "model design",
+      "star schema",
+      "fact table",
+      "dimension table",
+      "power query",
+      "m language",
+      "kpi",
+      "report visual"
     ]
   }
 ];
