@@ -1,0 +1,31 @@
+[
+  {
+    "id": "report-001",
+    "mode": "report",
+    "question": "Write a brief executive summary structure for a board paper recommending a new technology investment.",
+    "expectedKeyPoints": [
+      "Clear recommendation stated upfront",
+      "Problem or opportunity being addressed",
+      "Key supporting evidence or analysis",
+      "Financial implications or cost",
+      "Risks and mitigations",
+      "Requested decision or approval"
+    ],
+    "minimumScore": 7
+  },
+  {
+    "id": "report-002",
+    "mode": "report",
+    "question": "What are the key sections of a well-structured business case?",
+    "expectedKeyPoints": [
+      "Executive summary with recommendation",
+      "Problem statement or opportunity description",
+      "Options considered including do-nothing baseline",
+      "Recommended option with rationale",
+      "Financial analysis including costs and benefits",
+      "Risk assessment",
+      "Implementation plan"
+    ],
+    "minimumScore": 7
+  }
+]
