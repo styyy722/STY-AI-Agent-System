@@ -124,6 +124,10 @@ ${filePrompt}
     });
   }
 
+  if (response.confidenceBlock) {
+    console.log(response.confidenceBlock);
+  }
+
   if (options.output) {
     try {
       const savedContent = formatSavedOutputContent(
@@ -428,7 +432,8 @@ program
           : "";
         const duration = (entry.durationMs / 1000).toFixed(1) + "s";
 
-        console.log(`${status} ${time} | ${entry.mode} | ${entry.model} | ${duration}`);
+        const conf = entry.confidenceTier ? ` | ${entry.confidenceTier} confidence` : "";
+        console.log(`${status} ${time} | ${entry.mode} | ${entry.model} | ${duration}${conf}`);
         console.log(`   Input:  ${entry.inputSummary.slice(0, 100).replace(/
 /g, " ")}`);
         if (entry.status === "error") {
