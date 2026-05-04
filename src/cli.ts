@@ -13,7 +13,9 @@ import {
 } from "./skills/skillRegistry.js";
 import {
   clearSession,
-  listSessions
+  listSessions,
+  initDb,
+  getDbPath_public
 } from "./tools/sessionMemory.js";
 import { getLogDir_public } from "./tools/logger.js";
 import {
@@ -305,6 +307,14 @@ program
     );
     if (skills.length === 0) allPassed = false;
 
+    // Check 5: Session database
+    const dbPath = getDbPath_public();
+    const dbExists = fs.existsSync(dbPath);
+    console.log(dbExists
+      ? `✔ Session database: ${dbPath}`
+      : `✔ Session database will be created at: ${dbPath} (on first use)`
+    );
+
     // Summary
     console.log("");
     if (allPassed) {
@@ -472,6 +482,7 @@ reviewCmd
     const pending = items.filter(i => i.status === "pending").length;
     console.log(`Total: ${items.length} item(s), ${pending} pending.`);
     console.log(`Queue directory: ${getQueueDir_public()}`);
+    console.log(`Session database: ${getDbPath_public()}`);
     console.log("");
   });
 
@@ -731,4 +742,10 @@ program
     console.log("");
   });
 
-program.parseAsync();
+// Initialise persistent session database before any command runs
+initDb().then(() => {
+  program.parseAsync();
+}).catch((err) => {
+  console.error("Failed to initialise session database:", err.message);
+  process.exit(1);
+});
