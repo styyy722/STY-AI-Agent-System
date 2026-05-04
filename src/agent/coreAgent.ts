@@ -9,9 +9,9 @@ import { scoreOutput, formatConfidenceBlock, type ConfidenceResult } from "../to
 import { requiresReview, addToReviewQueue } from "../tools/reviewQueue.js";
 import { recordUsage } from "../tools/costTracker.js";
 import { searchDocuments, buildRagContext, autoIndexOutput } from "../tools/ragStore.js";
-import { queryNeedsWebSearch, searchWeb, formatSearchContext } from "../tools/webSearch.js";
 import { extractPythonBlocks } from "../tools/codeExtractor.js";
 import { executePythonCode, formatExecutionResult } from "../tools/codeExecutor.js";
+import { runRelevantTools, buildToolsSystemContext } from "../tools/toolRegistry.js";
 import type { ImageAttachment } from "../llm/llmInterface.js";
 
 export type AgentMode = "general" | "finance" | "data" | "report";
@@ -20,7 +20,7 @@ export interface AgentRequest {
   mode: AgentMode;
   userInput: string;
   sessionId?: string;
-  images?: ImageAttachment[];   // NEW: optional image attachments
+  images?: ImageAttachment[];
 }
 
 export interface AgentResponse {
@@ -33,11 +33,11 @@ export interface AgentResponse {
   confidenceBlock?: string;
   reviewQueued?: boolean;
   reviewId?: string;
-  webSearchUsed?: boolean;
+  toolsUsed?: string[];
   codeExecuted?: boolean;
 }
 
-export function buildSystemPrompt(mode: AgentMode): string {
+export function buildSystemPrompt(mode: AgentMode, toolsContext?: string): string {
   const basePrompt = `
 You are STY AI Agent System, a professional AI business agent.
 
@@ -57,6 +57,7 @@ Always follow these rules:
   4. Identify any risks, assumptions, or limitations to flag.
   5. Then produce a structured, complete response.
 - Do not rush to a conclusion. A thorough, well-reasoned answer is always preferred over a fast one.
+${toolsContext ? `\n${toolsContext}` : ""}
 `;
 
   const modePrompts: Record<AgentMode, string> = {
@@ -151,7 +152,7 @@ function buildNextSteps(mode: AgentMode): string[] {
 
 const MODE_MAX_TOKENS: Record<AgentMode, number> = {
   general: 10000,
-  finance: 15000,
+  finance: 20000,
   data: 20000,
   report: 20000
 };
@@ -169,9 +170,12 @@ function getModelName(usePremium: boolean): string {
 
 export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse> {
   const startTime = Date.now();
-  const baseSystemPrompt = buildSystemPrompt(request.mode);
   const skillContext = buildSkillContext(request.userInput);
   const matchedSkills = findRelevantSkills(request.userInput).map(s => s.name);
+
+  // ── Tool registry: get descriptions for system prompt ────────────────────
+  const toolsSystemContext = await buildToolsSystemContext();
+  const baseSystemPrompt = buildSystemPrompt(request.mode, toolsSystemContext);
 
   const finalSystemPrompt = skillContext
     ? `${baseSystemPrompt}\n\n${skillContext}`
@@ -199,23 +203,26 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     }
   }
 
-  // ── WEB SEARCH ───────────────────────────────────────────────────────────
-  let webSearchContext = "";
-  let webSearchUsed = false;
+  // ── Plugin tools: run all relevant tools pre-LLM ─────────────────────────
+  let toolsOutput = "";
+  let toolsUsed: string[] = [];
 
-  if (queryNeedsWebSearch(request.userInput)) {
-    try {
-      const searchResults = await searchWeb(request.userInput);
-      webSearchContext = formatSearchContext(searchResults);
-      webSearchUsed = true;
-    } catch {
-      // Web search failure must never block the agent
-    }
+  try {
+    const toolResult = await runRelevantTools({
+      mode: request.mode,
+      sessionId: request.sessionId,
+      userInput: request.userInput
+    });
+    toolsOutput = toolResult.combinedOutput;
+    toolsUsed = toolResult.toolsUsed;
+  } catch {
+    // Tool failure must never block the agent
   }
 
+  // Combine all context sources
   const enrichedUserInput = [
     ragContext,
-    webSearchContext,
+    toolsOutput,
     request.userInput
   ].filter(Boolean).join("\n\n");
 
@@ -227,10 +234,10 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       usePremiumModel,
       maxTokens: getMaxTokens(request.mode),
       history,
-      images: request.images    // ← pass images through to the LLM
+      images: request.images
     });
 
-    // ── CODE EXECUTION ───────────────────────────────────────────────────
+    // ── Code execution (post-LLM, data mode only) ─────────────────────────
     let finalText = llmResponse.text;
     let codeExecuted = false;
     const codeExecutionEnabled = process.env.CODE_EXECUTION_ENABLED === "true";
@@ -323,7 +330,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       confidenceBlock,
       reviewQueued,
       reviewId,
-      webSearchUsed,
+      toolsUsed,
       codeExecuted
     };
 
