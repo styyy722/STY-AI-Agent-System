@@ -16,6 +16,15 @@ import {
   listSessions
 } from "./tools/sessionMemory.js";
 import { getLogDir_public } from "./tools/logger.js";
+import {
+  getPendingItems,
+  getAllItems,
+  approveItem,
+  rejectItem,
+  getItemById,
+  exportApprovedOutput,
+  getQueueDir_public
+} from "./tools/reviewQueue.js";
 import { validateAgentCommand } from "./tools/inputValidator.js";
 import {
   MissingApiKeyError,
@@ -126,6 +135,15 @@ ${filePrompt}
 
   if (response.confidenceBlock) {
     console.log(response.confidenceBlock);
+  }
+
+  if (response.reviewQueued && response.reviewId) {
+    console.log("");
+    console.log("  ⚑  This output has been added to the review queue.");
+    console.log("     Review ID: " + response.reviewId);
+    console.log("     Run: sty-agent review list");
+    console.log("     Approve: sty-agent review approve " + response.reviewId);
+    console.log("");
   }
 
   if (options.output) {
@@ -372,6 +390,136 @@ program
   .option("-s, --session <id>", "Session ID to maintain conversation history")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("report", request, options);
+  });
+
+const reviewCmd = program
+  .command("review")
+  .description("Manage the output review queue");
+
+reviewCmd
+  .command("list")
+  .description("List all items in the review queue")
+  .option("--pending", "Show only pending items")
+  .action((options: { pending?: boolean }) => {
+    const items = options.pending ? getPendingItems() : getAllItems();
+    console.log("");
+    console.log("====================================");
+    console.log("Review Queue");
+    console.log("====================================");
+    console.log("");
+
+    if (items.length === 0) {
+      console.log(options.pending ? "No pending items." : "No items in the review queue.");
+      console.log("");
+      return;
+    }
+
+    items.forEach((item, i) => {
+      const time = new Date(item.timestamp).toLocaleString();
+      const statusIcon = item.status === "approved" ? "✔" : item.status === "rejected" ? "✖" : "⏳";
+      console.log(`${i + 1}. [${statusIcon} ${item.status.toUpperCase()}] ${item.id}`);
+      console.log(`   ${time} | ${item.mode} | Confidence: ${item.confidence.tier} (${item.confidence.score}/100)`);
+      console.log(`   Request: ${item.userInput.slice(0, 80).replace(/
+/g, " ")}...`);
+      if (item.status !== "pending") {
+        console.log(`   Reviewed by: ${item.reviewedBy} | ${item.reviewNote ?? ""}`);
+      }
+      if (item.confidence.flags.length > 0) {
+        console.log(`   Flags: ${item.confidence.flags.join(" | ")}`);
+      }
+      console.log("");
+    });
+
+    const pending = items.filter(i => i.status === "pending").length;
+    console.log(`Total: ${items.length} item(s), ${pending} pending.`);
+    console.log(`Queue directory: ${getQueueDir_public()}`);
+    console.log("");
+  });
+
+reviewCmd
+  .command("show <id>")
+  .description("Show full details of a review item")
+  .action((id: string) => {
+    const item = getItemById(id);
+    if (!item) {
+      console.error(`Review item "${id}" not found.`);
+      process.exit(1);
+    }
+    console.log("");
+    console.log("====================================");
+    console.log(`Review Item: ${item.id}`);
+    console.log("====================================");
+    console.log("");
+    console.log(`Status:     ${item.status.toUpperCase()}`);
+    console.log(`Mode:       ${item.mode}`);
+    console.log(`Time:       ${new Date(item.timestamp).toLocaleString()}`);
+    console.log(`Confidence: ${item.confidence.tier} (${item.confidence.score}/100)`);
+    if (item.confidence.flags.length > 0) {
+      console.log(`Flags:`);
+      item.confidence.flags.forEach(f => console.log(`  • ${f}`));
+    }
+    console.log("");
+    console.log("--- REQUEST ---");
+    console.log(item.userInput);
+    console.log("");
+    console.log("--- OUTPUT ---");
+    console.log(item.agentOutput);
+    if (item.status !== "pending") {
+      console.log("");
+      console.log(`Reviewed by: ${item.reviewedBy} at ${new Date(item.reviewedAt!).toLocaleString()}`);
+      if (item.reviewNote) console.log(`Note: ${item.reviewNote}`);
+    }
+    console.log("");
+  });
+
+reviewCmd
+  .command("approve <id>")
+  .description("Approve a review item")
+  .option("-b, --by <name>", "Reviewer name", "reviewer")
+  .option("-n, --note <note>", "Optional review note")
+  .action((id: string, options: { by: string; note?: string }) => {
+    const item = approveItem(id, options.by, options.note);
+    if (!item) {
+      console.error(`Review item "${id}" not found.`);
+      process.exit(1);
+    }
+    console.log("");
+    console.log(`✔ Approved: ${id}`);
+    console.log(`  To export: sty-agent review export ${id} --output outputs/approved-output.md`);
+    console.log("");
+  });
+
+reviewCmd
+  .command("reject <id>")
+  .description("Reject a review item")
+  .option("-b, --by <name>", "Reviewer name", "reviewer")
+  .option("-n, --note <note>", "Reason for rejection")
+  .action((id: string, options: { by: string; note?: string }) => {
+    const item = rejectItem(id, options.by, options.note);
+    if (!item) {
+      console.error(`Review item "${id}" not found.`);
+      process.exit(1);
+    }
+    console.log("");
+    console.log(`✖ Rejected: ${id}`);
+    if (options.note) console.log(`  Reason: ${options.note}`);
+    console.log(`  Re-run the original command with more context to try again.`);
+    console.log("");
+  });
+
+reviewCmd
+  .command("export <id>")
+  .description("Export an approved output to a file")
+  .requiredOption("-o, --output <path>", "Output file path")
+  .action((id: string, options: { output: string }) => {
+    const success = exportApprovedOutput(id, options.output);
+    if (!success) {
+      console.error(`Cannot export: item "${id}" not found or not yet approved.`);
+      process.exit(1);
+    }
+    console.log("");
+    console.log(`✔ Exported approved output to: ${options.output}`);
+    console.log("");
   });
 
 program
