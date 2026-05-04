@@ -127,9 +127,12 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     ? `${baseSystemPrompt}\n\n${skillContext}`
     : baseSystemPrompt;
 
+  const usePremiumModel = request.mode === "report";
+
   const claudeResponse = await callClaude({
     systemPrompt: finalSystemPrompt,
-    userInput: request.userInput
+    userInput: request.userInput,
+    usePremiumModel
   });
 
   return {
