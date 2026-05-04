@@ -19,13 +19,17 @@
     "commander": "^14.0.3",
     "dotenv": "^17.4.2",
     "ora": "^8.2.0",
-    "sql.js": "^1.14.1"
+    "sql.js": "^1.14.1",
+    "docx": "latest",
+    "exceljs": "latest",
+    "pdfkit": "latest"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.5"
+    "vitest": "^4.1.5",
+    "@types/pdfkit": "latest"
   },
   "engines": {
     "node": ">=20"
