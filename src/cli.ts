@@ -26,6 +26,13 @@ import {
 } from "./tools/sessionMemory.js";
 import { getLogDir_public } from "./tools/logger.js";
 import {
+  indexDocument,
+  searchDocuments,
+  deleteDocument,
+  listDocuments,
+  getStats
+} from "./tools/ragStore.js";
+import {
   getDailySummary,
   getWeeklySummary,
   getDailyBudgetUSD,
@@ -737,6 +744,123 @@ program
     console.log("Policy file: " + (require("node:fs").existsSync(require("node:path").join(process.cwd(), "access_policy.json")) ? "access_policy.json (custom)" : "default (no policy file found)"));
     console.log("Run: sty-agent policy --init  to create a customisable policy file.");
     console.log("");
+  });
+
+const ragCmd = program
+  .command("rag")
+  .description("Manage the RAG knowledge base");
+
+ragCmd
+  .command("stats")
+  .description("Show knowledge base stats")
+  .action(() => {
+    try {
+      const stats = getStats();
+      console.log("");
+      console.log("====================================");
+      console.log("RAG Knowledge Base");
+      console.log("====================================");
+      console.log("");
+      console.log(`Total documents: ${stats.total}`);
+      console.log(`Index: ${stats.indexPath}`);
+      console.log("");
+      if (Object.keys(stats.categories).length > 0) {
+        console.log("By category:");
+        Object.entries(stats.categories).forEach(([cat, count]) => {
+          console.log(`  ${cat.padEnd(12)} ${count} document(s)`);
+        });
+      }
+      console.log("");
+    } catch (err) {
+      console.error("RAG error:", err instanceof Error ? err.message : String(err));
+    }
+  });
+
+ragCmd
+  .command("list")
+  .description("List indexed documents")
+  .option("-c, --category <cat>", "Filter by category")
+  .action((options: { category?: string }) => {
+    try {
+      const docs = listDocuments(options.category);
+      console.log("");
+      console.log(`Found ${docs.length} document(s):`);
+      console.log("");
+      docs.forEach((d, i) => {
+        console.log(`${i + 1}. [${d.category}] ${d.id}`);
+        console.log(`   Source: ${d.source} | Indexed: ${new Date(d.indexedAt).toLocaleString()}`);
+        console.log(`   ${d.text.slice(0, 100).replace(/
+/g, " ")}...`);
+        console.log("");
+      });
+    } catch (err) {
+      console.error("RAG error:", err instanceof Error ? err.message : String(err));
+    }
+  });
+
+ragCmd
+  .command("search <query>")
+  .description("Search the knowledge base")
+  .option("-c, --category <cat>", "Filter by category")
+  .option("-k, --top-k <n>", "Number of results", "5")
+  .action((query: string, options: { category?: string; topK: string }) => {
+    try {
+      const results = searchDocuments({
+        query,
+        topK: parseInt(options.topK),
+        category: options.category,
+        minScore: 0.0   // show all results when searching manually
+      });
+      console.log("");
+      console.log(`Search: "${query}"`);
+      console.log(`Found ${results.length} result(s):`);
+      console.log("");
+      results.forEach((r, i) => {
+        console.log(`${i + 1}. [${(r.score * 100).toFixed(0)}% match] ${r.id}`);
+        console.log(`   Source: ${r.source} | Category: ${r.category}`);
+        console.log(`   ${r.text.slice(0, 150).replace(/
+/g, " ")}...`);
+        console.log("");
+      });
+    } catch (err) {
+      console.error("RAG error:", err instanceof Error ? err.message : String(err));
+    }
+  });
+
+ragCmd
+  .command("index <source>")
+  .description("Index a file or text into the knowledge base")
+  .option("-c, --category <cat>", "Category (finance|data|report|general)", "general")
+  .option("--text <text>", "Index raw text instead of a file")
+  .action(async (source: string, options: { category: string; text?: string }) => {
+    try {
+      let text: string;
+      if (options.text) {
+        text = options.text;
+      } else {
+        const { readBusinessFile } = await import("./tools/fileReader.js");
+        const ctx = readBusinessFile(source);
+        text = ctx.content;
+      }
+      const result = indexDocument({ text, source, category: options.category });
+      console.log("");
+      console.log(`✔ Indexed: ${result.id} (source: ${source}, category: ${options.category})`);
+      console.log("");
+    } catch (err) {
+      console.error("RAG index error:", err instanceof Error ? err.message : String(err));
+    }
+  });
+
+ragCmd
+  .command("delete <id>")
+  .description("Delete a document from the knowledge base")
+  .action((id: string) => {
+    try {
+      const removed = deleteDocument(id);
+      console.log(removed ? `✔ Deleted: ${id}` : `Not found: ${id}`);
+    } catch (err) {
+      console.error("RAG error:", err instanceof Error ? err.message : String(err));
+    }
   });
 
 program
