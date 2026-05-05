@@ -5,242 +5,814 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>STY AI Agent</title>
   <style>
+    :root {
+      --bg: #0b1020;
+      --bg-soft: #11182b;
+      --panel: rgba(17, 24, 43, 0.88);
+      --panel-strong: #141d33;
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --text: #ecf2ff;
+      --text-soft: #b4bfd8;
+      --text-dim: #7f8cab;
+      --primary: #5b8cff;
+      --primary-strong: #3c72f6;
+      --primary-soft: rgba(91, 140, 255, 0.16);
+      --success: #1bc47d;
+      --user: linear-gradient(135deg, #5b8cff, #7f6dff);
+      --shadow: 0 20px 45px rgba(0, 0, 0, 0.28);
+      --radius-xl: 22px;
+      --radius-lg: 18px;
+      --radius-md: 14px;
+      --radius-sm: 12px;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #0f0f0f;
-      color: #e8e8e8;
-      height: 100vh;
+      min-height: 100vh;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(91, 140, 255, 0.22), transparent 32%),
+        radial-gradient(circle at top right, rgba(127, 109, 255, 0.18), transparent 28%),
+        linear-gradient(180deg, #0b1020 0%, #0a0f1d 100%);
+      color: var(--text);
+      display: flex;
+      align-items: stretch;
+      justify-content: center;
+      padding: 18px;
+    }
+
+    .app-shell {
+      width: min(1440px, 100%);
+      min-height: calc(100vh - 36px);
+      display: grid;
+      grid-template-columns: 300px minmax(0, 1fr);
+      background: rgba(9, 14, 27, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+    }
+
+    .sidebar {
+      background: rgba(11, 16, 32, 0.86);
+      border-right: 1px solid var(--panel-border);
+      padding: 24px 20px;
       display: flex;
       flex-direction: column;
+      gap: 20px;
     }
 
-    header {
-      padding: 16px 24px;
-      border-bottom: 1px solid #2a2a2a;
-      background: #141414;
+    .brand {
       display: flex;
-      align-items: center;
-      gap: 12px;
+      align-items: flex-start;
+      gap: 14px;
     }
 
-    header h1 { font-size: 18px; font-weight: 600; color: #ffffff; }
-    header span { font-size: 13px; color: #888; }
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #5b8cff, #7f6dff);
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      color: white;
+      letter-spacing: 0.04em;
+      box-shadow: 0 10px 30px rgba(91, 140, 255, 0.35);
+      flex-shrink: 0;
+    }
 
-    .mode-bar {
-      padding: 10px 24px;
-      background: #141414;
-      border-bottom: 1px solid #2a2a2a;
+    .brand h1 {
+      font-size: 1.05rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .brand p {
+      color: var(--text-soft);
+      font-size: 0.92rem;
+      line-height: 1.5;
+    }
+
+    .sidebar-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-lg);
+      padding: 16px;
+    }
+
+    .sidebar h2,
+    .sidebar-card h3 {
+      font-size: 0.96rem;
+      margin-bottom: 10px;
+    }
+
+    .mode-list {
       display: flex;
-      gap: 8px;
+      flex-direction: column;
+      gap: 10px;
     }
 
     .mode-btn {
-      padding: 6px 14px;
-      border-radius: 20px;
-      border: 1px solid #333;
-      background: transparent;
-      color: #888;
-      font-size: 13px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.02);
+      color: var(--text);
+      border-radius: 16px;
+      padding: 14px;
+      text-align: left;
       cursor: pointer;
-      transition: all 0.15s;
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
     }
 
-    .mode-btn.active { background: #1a6cf5; border-color: #1a6cf5; color: #fff; }
-    .mode-btn:hover:not(.active) { border-color: #555; color: #ccc; }
+    .mode-btn:hover {
+      transform: translateY(-1px);
+      border-color: rgba(91, 140, 255, 0.45);
+      background: rgba(91, 140, 255, 0.08);
+    }
 
-    #chat {
-      flex: 1;
-      overflow-y: auto;
-      padding: 24px;
+    .mode-btn.active {
+      border-color: rgba(91, 140, 255, 0.6);
+      background: linear-gradient(180deg, rgba(91, 140, 255, 0.2), rgba(91, 140, 255, 0.08));
+      box-shadow: inset 0 0 0 1px rgba(91, 140, 255, 0.18);
+    }
+
+    .mode-btn strong {
+      display: block;
+      font-size: 0.94rem;
+      margin-bottom: 3px;
+    }
+
+    .mode-btn span {
+      display: block;
+      font-size: 0.83rem;
+      line-height: 1.45;
+      color: var(--text-soft);
+    }
+
+    .tips-list {
       display: flex;
       flex-direction: column;
+      gap: 8px;
+      color: var(--text-soft);
+      font-size: 0.87rem;
+      line-height: 1.5;
+      padding-left: 18px;
+    }
+
+    .main {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      background: linear-gradient(180deg, rgba(11, 16, 32, 0.58), rgba(17, 24, 43, 0.72));
+    }
+
+    .topbar {
+      padding: 22px 26px 16px;
+      border-bottom: 1px solid var(--panel-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+
+    .topbar h2 {
+      font-size: 1.15rem;
+      margin-bottom: 4px;
+    }
+
+    .topbar p {
+      color: var(--text-soft);
+      font-size: 0.92rem;
+    }
+
+    .status-group {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border: 1px solid var(--panel-border);
+      background: rgba(255, 255, 255, 0.04);
+      border-radius: 999px;
+      padding: 9px 12px;
+      color: var(--text-soft);
+      font-size: 0.82rem;
+      min-height: 38px;
+    }
+
+    .pill .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      box-shadow: 0 0 0 4px rgba(255,255,255,0.03);
+    }
+
+    .pill.success .dot { background: var(--success); }
+    .pill.mode-pill { color: #dce6ff; background: rgba(91, 140, 255, 0.12); }
+
+    .content {
+      min-height: 0;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 20px 26px 24px;
       gap: 16px;
     }
 
-    .message { max-width: 780px; line-height: 1.6; }
+    .suggestion-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .chip {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.03);
+      color: var(--text-soft);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 0.84rem;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .chip:hover {
+      color: var(--text);
+      border-color: rgba(91, 140, 255, 0.36);
+      background: rgba(91, 140, 255, 0.09);
+    }
+
+    #chat {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      padding-right: 4px;
+    }
+
+    .welcome {
+      display: grid;
+      grid-template-columns: 1.15fr 0.95fr;
+      gap: 16px;
+    }
+
+    .hero-card,
+    .guide-card {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: var(--radius-xl);
+      padding: 22px;
+    }
+
+    .hero-card {
+      background:
+        linear-gradient(135deg, rgba(91, 140, 255, 0.18), rgba(127, 109, 255, 0.12)),
+        var(--panel);
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #dbe6ff;
+      font-size: 0.78rem;
+      margin-bottom: 16px;
+    }
+
+    .hero-card h3 {
+      font-size: 1.55rem;
+      margin-bottom: 10px;
+      line-height: 1.2;
+    }
+
+    .hero-card p,
+    .guide-card p,
+    .guide-card li {
+      color: var(--text-soft);
+      line-height: 1.6;
+      font-size: 0.93rem;
+    }
+
+    .highlight-grid {
+      margin-top: 18px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .mini-stat {
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 16px;
+      padding: 14px;
+    }
+
+    .mini-stat strong {
+      display: block;
+      font-size: 1rem;
+      margin-bottom: 4px;
+    }
+
+    .mini-stat span {
+      color: var(--text-soft);
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+
+    .guide-card h4 {
+      font-size: 1rem;
+      margin-bottom: 10px;
+    }
+
+    .guide-card ul {
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 10px 0 18px;
+    }
+
+    .message {
+      max-width: min(860px, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
 
     .message.user {
       align-self: flex-end;
-      background: #1a6cf5;
-      color: #fff;
-      padding: 12px 16px;
-      border-radius: 16px 16px 4px 16px;
-      font-size: 14px;
+      align-items: flex-end;
     }
 
     .message.agent {
       align-self: flex-start;
-      background: #1e1e1e;
-      border: 1px solid #2a2a2a;
-      padding: 16px 20px;
-      border-radius: 4px 16px 16px 16px;
-      font-size: 14px;
+      align-items: flex-start;
+    }
+
+    .message-meta {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      padding: 0 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .bubble {
+      width: fit-content;
+      max-width: 100%;
+      padding: 15px 18px;
+      border-radius: 18px;
+      line-height: 1.65;
+      font-size: 0.94rem;
       white-space: pre-wrap;
       word-break: break-word;
+      border: 1px solid rgba(255,255,255,0.08);
     }
 
-    .message.agent.loading { color: #666; font-style: italic; }
+    .message.user .bubble {
+      color: #fff;
+      background: var(--user);
+      border: none;
+      border-bottom-right-radius: 8px;
+      box-shadow: 0 12px 28px rgba(91, 140, 255, 0.24);
+    }
 
-    .input-area {
-      padding: 16px 24px;
-      background: #141414;
-      border-top: 1px solid #2a2a2a;
+    .message.agent .bubble {
+      background: rgba(255,255,255,0.04);
+      border-bottom-left-radius: 8px;
+    }
+
+    .message.agent.loading .bubble {
+      color: var(--text-soft);
+      font-style: italic;
+      background: rgba(255,255,255,0.035);
+    }
+
+    .composer {
+      border: 1px solid var(--panel-border);
+      background: rgba(9, 14, 27, 0.74);
+      border-radius: 22px;
+      padding: 14px;
       display: flex;
+      flex-direction: column;
       gap: 12px;
-      align-items: flex-end;
+      box-shadow: 0 16px 34px rgba(0, 0, 0, 0.16);
     }
 
-    #prompt {
-      flex: 1;
-      background: #1e1e1e;
-      border: 1px solid #333;
-      border-radius: 12px;
-      padding: 12px 16px;
-      color: #e8e8e8;
-      font-size: 14px;
+    .composer textarea {
+      width: 100%;
+      background: transparent;
+      border: none;
+      color: var(--text);
+      font-size: 0.95rem;
       resize: none;
-      min-height: 48px;
-      max-height: 160px;
+      min-height: 72px;
+      max-height: 220px;
       outline: none;
       font-family: inherit;
+      line-height: 1.6;
+    }
+
+    .composer textarea::placeholder { color: var(--text-dim); }
+
+    .composer-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .helper-text {
+      color: var(--text-dim);
+      font-size: 0.82rem;
       line-height: 1.5;
     }
 
-    #prompt:focus { border-color: #1a6cf5; }
+    .send-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ghost-btn,
+    #sendBtn {
+      border: none;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      transition: transform 0.16s ease, background 0.16s ease, opacity 0.16s ease;
+    }
+
+    .ghost-btn {
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-soft);
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .ghost-btn:hover { background: rgba(255,255,255,0.09); }
 
     #sendBtn {
-      background: #1a6cf5;
+      background: var(--primary-strong);
       color: white;
-      border: none;
-      border-radius: 10px;
-      padding: 12px 20px;
-      font-size: 14px;
-      cursor: pointer;
-      white-space: nowrap;
-      height: 48px;
+      min-width: 120px;
     }
 
-    #sendBtn:hover { background: #1558cc; }
-    #sendBtn:disabled { background: #333; color: #666; cursor: not-allowed; }
+    #sendBtn:hover { transform: translateY(-1px); background: #285ee2; }
+    #sendBtn:disabled { cursor: not-allowed; opacity: 0.55; transform: none; }
 
-    .empty-state {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      color: #555;
-      text-align: center;
+    .visually-hidden {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      border: 0;
     }
 
-    .empty-state h2 { font-size: 22px; color: #888; }
-    .empty-state p { font-size: 14px; }
+    @media (max-width: 1120px) {
+      .app-shell {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        border-right: none;
+        border-bottom: 1px solid var(--panel-border);
+      }
+
+      .welcome {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 760px) {
+      body { padding: 0; }
+      .app-shell {
+        min-height: 100vh;
+        border-radius: 0;
+      }
+
+      .topbar,
+      .content,
+      .sidebar {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      .highlight-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .composer-footer {
+        align-items: stretch;
+      }
+
+      .send-row {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      #sendBtn { flex: 1; }
+    }
   </style>
 </head>
 <body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">STY</div>
+        <div>
+          <h1>STY AI Agent</h1>
+          <p>Business-focused AI support for finance, analytics, reporting, and structured problem-solving.</p>
+        </div>
+      </div>
 
-<header>
-  <h1>STY AI Agent</h1>
-  <span>Finance · Data · Reporting</span>
-</header>
+      <div class="sidebar-card">
+        <h3>Modes</h3>
+        <div class="mode-list">
+          <button class="mode-btn active" data-mode="general">
+            <strong>General</strong>
+            <span>Everyday writing, planning, research support, and quick task help.</span>
+          </button>
+          <button class="mode-btn" data-mode="finance">
+            <strong>Finance</strong>
+            <span>Valuation, WACC, ratios, investment analysis, and finance explanations.</span>
+          </button>
+          <button class="mode-btn" data-mode="data">
+            <strong>Data</strong>
+            <span>EDA, model ideas, feature engineering, interpretation, and analytics workflows.</span>
+          </button>
+          <button class="mode-btn" data-mode="report">
+            <strong>Report</strong>
+            <span>Executive summaries, polished writing, business recommendations, and presentation-ready outputs.</span>
+          </button>
+        </div>
+      </div>
 
-<div class="mode-bar">
-  <button class="mode-btn active" data-mode="general">General</button>
-  <button class="mode-btn" data-mode="finance">Finance</button>
-  <button class="mode-btn" data-mode="data">Data</button>
-  <button class="mode-btn" data-mode="report">Report</button>
-</div>
+      <div class="sidebar-card">
+        <h3>Tips for better answers</h3>
+        <ul class="tips-list">
+          <li>State your goal and who the audience is.</li>
+          <li>Paste context, assumptions, or constraints.</li>
+          <li>Ask for a format: bullet points, email, report, table, or script.</li>
+          <li>Use the correct mode before sending.</li>
+        </ul>
+      </div>
+    </aside>
 
-<div id="chat">
-  <div class="empty-state">
-    <h2>What do you need help with?</h2>
-    <p>Select a mode above, then type your question below.</p>
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h2>Ask better. Decide faster.</h2>
+          <p>A clearer interface for structured, business-ready AI outputs.</p>
+        </div>
+        <div class="status-group">
+          <div class="pill success" id="healthPill"><span class="dot"></span><span id="healthText">Checking connection...</span></div>
+          <div class="pill mode-pill"><span>Mode:</span> <strong id="currentModeLabel">General</strong></div>
+        </div>
+      </header>
+
+      <section class="content">
+        <div class="suggestion-row" id="suggestions"></div>
+
+        <section id="chat">
+          <div class="welcome" id="welcomeState">
+            <div class="hero-card">
+              <div class="eyebrow">Designed for finance, data, and reporting work</div>
+              <h3>What do you need help with today?</h3>
+              <p>Choose a mode, ask a question, and get a more structured response. This interface is designed to make the agent feel more trustworthy, easier to use, and easier to understand.</p>
+              <div class="highlight-grid">
+                <div class="mini-stat">
+                  <strong>Mode-aware</strong>
+                  <span>Different modes guide the agent toward more relevant outputs.</span>
+                </div>
+                <div class="mini-stat">
+                  <strong>Clearer UI</strong>
+                  <span>Better hierarchy, cleaner message styling, and less visual clutter.</span>
+                </div>
+                <div class="mini-stat">
+                  <strong>Accessible</strong>
+                  <span>Improved contrast, spacing, and button visibility for easier use.</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="guide-card">
+              <h4>Try prompts like these</h4>
+              <ul>
+                <li>Summarise the key findings of this dataset for a manager in plain English.</li>
+                <li>Explain WACC simply and provide a worked example.</li>
+                <li>Turn my messy notes into a professional executive summary.</li>
+                <li>Suggest feature engineering ideas to improve model performance.</li>
+              </ul>
+              <p>Tip: the more context you provide, the better the answer will be.</p>
+            </div>
+          </div>
+        </section>
+
+        <div class="composer">
+          <label class="visually-hidden" for="prompt">Message</label>
+          <textarea id="prompt" placeholder="Describe your task, context, and preferred output... (Shift+Enter for a new line)"></textarea>
+          <div class="composer-footer">
+            <div class="helper-text">Best results come from a clear objective, context, and desired output format.</div>
+            <div class="send-row">
+              <button class="ghost-btn" id="clearBtn" type="button">Clear chat</button>
+              <button id="sendBtn" type="button">Send message</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
-</div>
 
-<div class="input-area">
-  <textarea id="prompt" placeholder="Ask anything... (Shift+Enter for new line)" rows="1"></textarea>
-  <button id="sendBtn">Send</button>
-</div>
+  <script>
+    const modeMeta = {
+      general: {
+        label: 'General',
+        prompts: [
+          'Rewrite this email to sound more professional and concise.',
+          'Create a step-by-step action plan for this project.',
+          'Summarise this information for a non-technical audience.'
+        ]
+      },
+      finance: {
+        label: 'Finance',
+        prompts: [
+          'Explain WACC in simple terms and provide a numeric example.',
+          'Summarise the investment risks and opportunities from these notes.',
+          'Turn this financial analysis into board-ready bullet points.'
+        ]
+      },
+      data: {
+        label: 'Data',
+        prompts: [
+          'Summarise the likely data quality issues in this dataset.',
+          'Suggest feature engineering ideas to improve model performance.',
+          'Explain these model results in plain English for stakeholders.'
+        ]
+      },
+      report: {
+        label: 'Report',
+        prompts: [
+          'Turn these notes into an executive summary with recommendations.',
+          'Write a professional report introduction for this business case.',
+          'Create a clear slide-ready summary of the main findings.'
+        ]
+      }
+    };
 
-<script>
-  let currentMode = 'general';
-  const chat = document.getElementById('chat');
-  const promptEl = document.getElementById('prompt');
-  const sendBtn = document.getElementById('sendBtn');
+    let currentMode = 'general';
+    const chat = document.getElementById('chat');
+    const promptEl = document.getElementById('prompt');
+    const sendBtn = document.getElementById('sendBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const currentModeLabel = document.getElementById('currentModeLabel');
+    const suggestionsEl = document.getElementById('suggestions');
+    const welcomeState = document.getElementById('welcomeState');
+    const healthPill = document.getElementById('healthPill');
+    const healthText = document.getElementById('healthText');
 
-  document.querySelectorAll('.mode-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentMode = btn.dataset.mode;
-    });
-  });
-
-  promptEl.addEventListener('input', () => {
-    promptEl.style.height = 'auto';
-    promptEl.style.height = Math.min(promptEl.scrollHeight, 160) + 'px';
-  });
-
-  promptEl.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  });
-
-  sendBtn.addEventListener('click', sendMessage);
-
-  function clearEmptyState() {
-    const empty = chat.querySelector('.empty-state');
-    if (empty) empty.remove();
-  }
-
-  function addMessage(text, type) {
-    clearEmptyState();
-    const div = document.createElement('div');
-    div.className = `message ${type}`;
-    div.textContent = text;
-    chat.appendChild(div);
-    chat.scrollTop = chat.scrollHeight;
-    return div;
-  }
-
-  async function sendMessage() {
-    const prompt = promptEl.value.trim();
-    if (!prompt) return;
-
-    promptEl.value = '';
-    promptEl.style.height = 'auto';
-    sendBtn.disabled = true;
-    sendBtn.textContent = '...';
-
-    addMessage(prompt, 'user');
-    const loadingMsg = addMessage('Thinking...', 'agent loading');
-
-    try {
-      const res = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: currentMode, prompt }),
+    document.querySelectorAll('.mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentMode = btn.dataset.mode;
+        currentModeLabel.textContent = modeMeta[currentMode].label;
+        renderSuggestions();
       });
+    });
 
-      const data = await res.json();
-      loadingMsg.classList.remove('loading');
-      loadingMsg.textContent = data.response || data.error || 'No response received.';
-    } catch (err) {
-      loadingMsg.classList.remove('loading');
-      loadingMsg.textContent = 'Error: Could not reach the server.';
+    function renderSuggestions() {
+      suggestionsEl.innerHTML = '';
+      modeMeta[currentMode].prompts.forEach(prompt => {
+        const chip = document.createElement('button');
+        chip.className = 'chip';
+        chip.type = 'button';
+        chip.textContent = prompt;
+        chip.addEventListener('click', () => {
+          promptEl.value = prompt;
+          autoResize();
+          promptEl.focus();
+        });
+        suggestionsEl.appendChild(chip);
+      });
     }
 
-    sendBtn.disabled = false;
-    sendBtn.textContent = 'Send';
-    chat.scrollTop = chat.scrollHeight;
-  }
-</script>
+    function autoResize() {
+      promptEl.style.height = 'auto';
+      promptEl.style.height = Math.min(promptEl.scrollHeight, 220) + 'px';
+    }
 
+    promptEl.addEventListener('input', autoResize);
+
+    promptEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    sendBtn.addEventListener('click', sendMessage);
+    clearBtn.addEventListener('click', clearChat);
+
+    function clearChat() {
+      chat.innerHTML = '';
+      chat.appendChild(welcomeState);
+      promptEl.focus();
+    }
+
+    function clearWelcomeState() {
+      if (welcomeState && welcomeState.parentNode === chat) {
+        welcomeState.remove();
+      }
+    }
+
+    function createMessage(text, type, metaLabel) {
+      clearWelcomeState();
+      const wrapper = document.createElement('div');
+      wrapper.className = `message ${type}`;
+
+      const meta = document.createElement('div');
+      meta.className = 'message-meta';
+      meta.textContent = metaLabel;
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text;
+
+      wrapper.appendChild(meta);
+      wrapper.appendChild(bubble);
+      chat.appendChild(wrapper);
+      chat.scrollTop = chat.scrollHeight;
+      return wrapper;
+    }
+
+    async function checkHealth() {
+      try {
+        const res = await fetch('/api/health');
+        if (!res.ok) throw new Error('Health check failed');
+        healthPill.classList.add('success');
+        healthText.textContent = 'Connected';
+      } catch (e) {
+        healthPill.classList.remove('success');
+        healthText.textContent = 'Offline';
+      }
+    }
+
+    async function sendMessage() {
+      const prompt = promptEl.value.trim();
+      if (!prompt) return;
+
+      promptEl.value = '';
+      autoResize();
+      sendBtn.disabled = true;
+      sendBtn.textContent = 'Sending...';
+
+      createMessage(prompt, 'user', 'You');
+      const loadingMsg = createMessage('Thinking through your request...', 'agent loading', `${modeMeta[currentMode].label} mode`);
+
+      try {
+        const res = await fetch('/api/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: currentMode, prompt }),
+        });
+
+        const data = await res.json();
+        loadingMsg.classList.remove('loading');
+        const bubble = loadingMsg.querySelector('.bubble');
+        bubble.textContent = data.response || data.error || 'No response received.';
+      } catch (err) {
+        loadingMsg.classList.remove('loading');
+        const bubble = loadingMsg.querySelector('.bubble');
+        bubble.textContent = 'Error: Could not reach the server.';
+      }
+
+      sendBtn.disabled = false;
+      sendBtn.textContent = 'Send message';
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    renderSuggestions();
+    autoResize();
+    checkHealth();
+  </script>
 </body>
 </html>
