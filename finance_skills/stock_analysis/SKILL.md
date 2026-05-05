@@ -1,159 +1,96 @@
 ---
 name: stock-analysis
-description: Analyze US stocks and cryptocurrencies using Yahoo Finance data. Includes portfolio management, crypto support, and periodic analysis.
+description: Analyze US stocks and cryptocurrencies using Yahoo Finance data. Includes portfolio analysis, crypto support, fundamentals, technicals, and sentiment. Write and execute Python code using yfinance to fetch live data and produce structured analysis.
 ---
 
 # Stock Analysis Skill
 
-Analyze US stocks and cryptocurrencies using Yahoo Finance data. Includes portfolio management, crypto support, and periodic analysis.
+Analyze US stocks and cryptocurrencies by writing and executing Python code using the `yfinance` library. This skill runs entirely through the STY Agent code execution engine — no external scripts required.
 
-## Quick Start
+## How to Use This Skill
 
-**IMPORTANT:** Pass ONLY the stock ticker symbol(s) as arguments. Do NOT add extra text, headers, or formatting in the command.
+When a user asks to analyze a stock or crypto ticker, write a complete, self-contained Python script using `yfinance`. Use `print()` statements throughout so the agent can read and interpret the output.
 
-### Analyze a single ticker
+**Always use the ticker symbol, not the company name.**
 
-```bash
-uv run {baseDir}/scripts/analyze_stock.py AAPL
-uv run {baseDir}/scripts/analyze_stock.py MSFT --output json
+```text
+AAPL     → Apple Inc.
+MSFT     → Microsoft
+BTC-USD  → Bitcoin
+ETH-USD  → Ethereum
 ```
 
-### Compare multiple tickers
+## Standard Analysis Template
 
-```bash
-uv run {baseDir}/scripts/analyze_stock.py AAPL MSFT GOOGL
+For any stock analysis request, write Python code following this pattern:
+
+```python
+import yfinance as yf
+
+ticker = "AAPL"  # replace with requested ticker
+stock = yf.Ticker(ticker)
+info = stock.info
+hist = stock.history(period="6mo")
+
+# Price and momentum
+current_price = info.get("currentPrice") or info.get("regularMarketPrice")
+week52_high = info.get("fiftyTwoWeekHigh")
+week52_low = info.get("fiftyTwoWeekLow")
+avg_volume = info.get("averageVolume")
+
+print(f"=== {ticker} — Stock Analysis ===")
+print(f"Current Price:  ${current_price:.2f}")
+print(f"52-Week High:   ${week52_high:.2f}")
+print(f"52-Week Low:    ${week52_low:.2f}")
+print(f"Avg Volume:     {avg_volume:,}")
+
+# Fundamentals
+pe = info.get("trailingPE")
+pb = info.get("priceToBook")
+ev_ebitda = info.get("enterpriseToEbitda")
+net_margin = info.get("profitMargins")
+revenue_growth = info.get("revenueGrowth")
+debt_equity = info.get("debtToEquity")
+
+print(f"\n--- Fundamentals ---")
+print(f"P/E Ratio:       {pe:.1f}" if pe else "P/E Ratio:       N/A")
+print(f"P/B Ratio:       {pb:.2f}" if pb else "P/B Ratio:       N/A")
+print(f"EV/EBITDA:       {ev_ebitda:.1f}" if ev_ebitda else "EV/EBITDA:       N/A")
+print(f"Net Margin:      {net_margin*100:.1f}%" if net_margin else "Net Margin:      N/A")
+print(f"Revenue Growth:  {revenue_growth*100:.1f}%" if revenue_growth else "Revenue Growth:  N/A")
+print(f"Debt/Equity:     {debt_equity:.2f}" if debt_equity else "Debt/Equity:     N/A")
+
+# Analyst consensus
+target = info.get("targetMeanPrice")
+recommendation = info.get("recommendationKey", "N/A").upper()
+print(f"\n--- Analyst View ---")
+print(f"Consensus:       {recommendation}")
+print(f"Price Target:    ${target:.2f}" if target else "Price Target:    N/A")
+if target and current_price:
+    upside = ((target - current_price) / current_price) * 100
+    print(f"Implied Upside:  {upside:+.1f}%")
 ```
-
----
 
 ## Cryptocurrency Analysis
 
-Analyze top 20 cryptocurrencies by market cap:
+For crypto tickers (e.g. BTC-USD, ETH-USD), adapt the template — fundamentals like P/E are not available. Focus on price momentum, volume, market cap, and 52-week range.
 
-```bash
-uv run {baseDir}/scripts/analyze_stock.py BTC-USD
-uv run {baseDir}/scripts/analyze_stock.py ETH-USD SOL-USD
-```
-
-### Supported Cryptos
+**Supported ticker format:** append `-USD` to the symbol.
 
 ```text
-BTC-USD, ETH-USD, BNB-USD, SOL-USD, XRP-USD, ADA-USD, DOGE-USD,
-AVAX-USD, DOT-USD, MATIC-USD, LINK-USD, ATOM-USD, UNI-USD,
-LTC-USD, BCH-USD, XLM-USD, ALGO-USD, VET-USD, FIL-USD, NEAR-USD
+BTC-USD, ETH-USD, SOL-USD, BNB-USD, XRP-USD, ADA-USD, DOGE-USD,
+AVAX-USD, DOT-USD, LINK-USD, UNI-USD, LTC-USD, BCH-USD
 ```
-
-### Crypto Analysis Dimensions
-
-- Market cap: large, mid, or small classification
-- Category: Smart Contract L1, DeFi, Payment, etc.
-- BTC correlation: 30-day
-- Momentum: RSI and price range
-- Market context: VIX and general market regime
-
----
-
-## Portfolio Management
-
-Create and manage portfolios with mixed assets, including stocks and crypto.
-
-### Create portfolio
-
-```bash
-uv run {baseDir}/scripts/portfolio.py create "My Portfolio"
-```
-
-### Add assets
-
-```bash
-uv run {baseDir}/scripts/portfolio.py add AAPL --quantity 100 --cost 150.00
-uv run {baseDir}/scripts/portfolio.py add BTC-USD --quantity 0.5 --cost 40000 --portfolio "My Portfolio"
-```
-
-### View holdings with current P&L
-
-```bash
-uv run {baseDir}/scripts/portfolio.py show
-```
-
-### Update or remove assets
-
-```bash
-uv run {baseDir}/scripts/portfolio.py update AAPL --quantity 150
-uv run {baseDir}/scripts/portfolio.py remove BTC-USD
-```
-
-### List or delete portfolios
-
-```bash
-uv run {baseDir}/scripts/portfolio.py list
-uv run {baseDir}/scripts/portfolio.py delete "My Portfolio"
-```
-
-### Portfolio Storage
-
-```text
-~/.clawdbot/skills/stock-analysis/portfolios.json
-```
-
----
 
 ## Portfolio Analysis
 
-Analyze all assets in a portfolio with optional period returns.
-
-### Analyze portfolio
-
-```bash
-uv run {baseDir}/scripts/analyze_stock.py --portfolio "My Portfolio"
-```
-
-### Analyze portfolio with period returns
-
-```bash
-uv run {baseDir}/scripts/analyze_stock.py --portfolio "My Portfolio" --period weekly
-uv run {baseDir}/scripts/analyze_stock.py -p "My Portfolio" --period monthly
-```
-
-### Portfolio Summary Includes
-
-- Total cost, current value, and P&L
-- Period return, if specified
-- Concentration warnings above 30% in a single asset
-- Recommendation summary: BUY, HOLD, and SELL counts
-
----
-
-## Correct and Incorrect Input Examples
-
-### Correct
-
-```bash
-uv run {baseDir}/scripts/analyze_stock.py BAC
-uv run {baseDir}/scripts/analyze_stock.py BTC-USD
-```
-
-### Incorrect
-
-```bash
-uv run {baseDir}/scripts/analyze_stock.py === BANK OF AMERICA (BAC) - Q4 2025 EARNINGS ===
-uv run {baseDir}/scripts/analyze_stock.py "Bank of America"
-```
-
-Use the ticker symbol only.
-
-For example:
-
-```text
-BAC, not "Bank of America"
-BTC-USD, not "Bitcoin"
-```
+When the user provides a list of tickers with quantities and cost bases, loop through each, fetch current price via yfinance, and compute P&L for each position. Then summarise total portfolio value, total cost, overall P&L %, and flag any single position over 30% of the portfolio as a concentration risk.
 
 ---
 
 ## Analysis Components
 
-The script evaluates eight key dimensions:
+Evaluate eight dimensions and weight them to produce an overall Outlook (Positive / Neutral / Cautious):
 
 | Component | Weight | Description |
 |---|---:|---|
@@ -166,7 +103,7 @@ The script evaluates eight key dimensions:
 | Momentum | 15% | RSI, 52-week range, volume, and relative strength |
 | Sentiment Analysis | 10% | Fear/Greed Index, short interest, VIX term structure, insider trading, and put/call ratio |
 
-Weights auto-normalize if some components are unavailable.
+Weights auto-normalise if some components are unavailable. Never express the outlook as BUY / HOLD / SELL — use Positive / Neutral / Cautious only.
 
 ---
 
@@ -352,21 +289,33 @@ The script:
 
 ## Output Format
 
-### Default Text Output
+Structure every stock analysis response as follows:
 
-Concise BUY, HOLD, or SELL signal with:
+```
+=== [TICKER] — Stock Analysis ===
 
-- 3 to 5 bullet points
-- Caveats
-- Prominent not-financial-advice warning
+PRICE & MOMENTUM
+  Current price, 52-week range, RSI, volume vs average
 
-### JSON Output
+FUNDAMENTALS
+  P/E, P/B, EV/EBITDA, net margin, revenue growth, debt/equity
 
-Structured data with:
+ANALYST VIEW
+  Consensus rating, mean price target, implied upside/downside
 
-- Scores
-- Metrics
-- Raw data for further analysis
+KEY RISKS
+  2–4 specific risks flagged for this ticker and current market context
+
+OUTLOOK
+  Positive / Neutral / Cautious  — one sentence rationale
+
+⚠ DISCLAIMER: This analysis is for informational and educational purposes
+only. It is not financial advice and should not be used as the basis for
+investment decisions. Always conduct your own research and consult a licensed
+financial adviser before investing.
+```
+
+**Do not use BUY / HOLD / SELL language.** Use Positive / Neutral / Cautious outlook instead. These are research summaries, not investment recommendations.
 
 ---
 

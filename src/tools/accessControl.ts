@@ -77,13 +77,48 @@ function getPolicyPath(): string {
 }
 
 export function loadPolicy(): AccessPolicy {
+  // Test-only override: force the default policy regardless of disk state.
+  // Production never sets this env var; it exists so unit tests can run
+  // hermetically without depending on whatever access_policy.json is on disk.
+  if (process.env.STY_FORCE_DEFAULT_POLICY === "1") {
+    return DEFAULT_POLICY;
+  }
+
   const policyPath = getPolicyPath();
   if (!fs.existsSync(policyPath)) {
     return DEFAULT_POLICY;
   }
   try {
     const raw = fs.readFileSync(policyPath, "utf-8");
-    return { ...DEFAULT_POLICY, ...JSON.parse(raw) } as AccessPolicy;
+    const parsed = JSON.parse(raw) as Partial<AccessPolicy>;
+
+    // Deep-merge with DEFAULT_POLICY so a partial user-supplied policy can't
+    // delete required fields. Previously a shallow spread allowed a custom
+    // `defaultUser` block missing `allowedModes` to crash checkModeAccess at
+    // runtime with: "Cannot read properties of undefined (reading 'includes')".
+    return {
+      ...DEFAULT_POLICY,
+      ...parsed,
+      defaultUser: {
+        ...DEFAULT_POLICY.defaultUser,
+        ...(parsed.defaultUser ?? {})
+      },
+      users: Array.isArray(parsed.users)
+        ? parsed.users.map((u: Partial<UserPolicy>) => ({
+            ...DEFAULT_POLICY.defaultUser,
+            ...u
+          })) as UserPolicy[]
+        : DEFAULT_POLICY.users,
+      dataClassification: Array.isArray(parsed.dataClassification)
+        ? parsed.dataClassification
+        : DEFAULT_POLICY.dataClassification,
+      blockedExtensions: Array.isArray(parsed.blockedExtensions)
+        ? parsed.blockedExtensions
+        : DEFAULT_POLICY.blockedExtensions,
+      blockedPathPatterns: Array.isArray(parsed.blockedPathPatterns)
+        ? parsed.blockedPathPatterns
+        : DEFAULT_POLICY.blockedPathPatterns
+    } as AccessPolicy;
   } catch {
     return DEFAULT_POLICY;
   }

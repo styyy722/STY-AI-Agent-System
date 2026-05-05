@@ -257,6 +257,7 @@ export function readFolder(
         entry.name === "logs" ||
         entry.name === "usage" ||
         entry.name === "review_queue" ||
+        entry.name === "tool_audit" ||
         entry.name === "web_uploads" ||
         entry.name === "web_outputs"
       ) {

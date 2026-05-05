@@ -20,6 +20,34 @@ interface SkillRoot {
 
 const SKILL_ROOTS: SkillRoot[] = [
   {
+    category: "general",
+    rootFolder: "general_skills",
+    fallbackKeywords: [
+      "image",
+      "photo",
+      "picture",
+      "screenshot",
+      "screen shot",
+      "visual",
+      "diagram",
+      "chart",
+      "graph",
+      "scan",
+      "receipt",
+      "whiteboard",
+      "mockup",
+      "ui",
+      "ux",
+      "ocr",
+      "read this image",
+      "what is in this image",
+      "describe this image",
+      "extract text",
+      "uploaded image",
+      "attached image"
+    ]
+  },
+  {
     category: "finance",
     rootFolder: "finance_skills",
     fallbackKeywords: [
@@ -313,6 +341,32 @@ const SKILL_ROOTS: SkillRoot[] = [
 ];
 
 const EXTRA_KEYWORDS_BY_FOLDER: Record<string, string[]> = {
+  // --- General skills ---
+  screenshot_photo_analysis: [
+    "screenshot",
+    "screen shot",
+    "photo",
+    "image",
+    "picture",
+    "visual analysis",
+    "read screenshot",
+    "read image",
+    "read photo",
+    "extract text",
+    "ocr",
+    "transcribe",
+    "ui screenshot",
+    "dashboard screenshot",
+    "chart screenshot",
+    "scan",
+    "receipt",
+    "whiteboard",
+    "mockup",
+    "wireframe",
+    "interface",
+    "error screenshot"
+  ],
+
   // --- Finance skills ---
   "financial-analyst": [
     "wacc",
@@ -909,6 +963,25 @@ const EXTRA_KEYWORDS_BY_FOLDER: Record<string, string[]> = {
   ]
 };
 
+/**
+ * Match a keyword inside the user input using word boundaries based on
+ * non-alphanumeric characters. This lets multi-symbol tokens like "p/e",
+ * "m&a", or "d/e ratio" still match while preventing bare tokens like "f1"
+ * from matching unrelated words such as "profile".
+ *
+ * Match is case-insensitive. Returns false for empty/whitespace keywords.
+ */
+export function keywordMatches(input: string, keyword: string): boolean {
+  if (!keyword) return false;
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword) return false;
+
+  const escaped = normalizedKeyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Boundary = start/end of string OR a non-alphanumeric character.
+  const re = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i");
+  return re.test(input);
+}
+
 function readSkillFolders(rootFolder: string): string[] {
   const rootPath = path.join(process.cwd(), rootFolder);
 
@@ -1034,16 +1107,17 @@ export function findRelevantSkills(userInput: string): AgentSkill[] {
   return availableSkills
     .map((skill) => {
       const matchedKeywords = skill.keywords.filter((keyword) =>
-        normalizedInput.includes(keyword)
+        keywordMatches(normalizedInput, keyword)
       );
 
-      const folderMatch = normalizedInput.includes(
+      const folderMatch = keywordMatches(
+        normalizedInput,
         skill.folder.replace(/[-_]/g, " ")
       )
         ? 2
         : 0;
 
-      const nameMatch = normalizedInput.includes(skill.name.toLowerCase()) ? 2 : 0;
+      const nameMatch = keywordMatches(normalizedInput, skill.name.toLowerCase()) ? 2 : 0;
 
       return {
         skill,

@@ -1,8 +1,9 @@
-import { callClaude } from "../llm/claudeClient.js";
+import { callClaude, BudgetExceededError } from "../llm/claudeClient.js";
 import { buildSystemPrompt, type AgentMode } from "./coreAgent.js";
 import { buildSkillContext } from "../skills/skillRegistry.js";
 import { writeLog, buildLogEntry } from "../tools/logger.js";
-import { recordUsage } from "../tools/costTracker.js";
+import { recordUsage, checkBudget } from "../tools/costTracker.js";
+import type { ImageAttachment } from "../llm/llmInterface.js";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -18,6 +19,7 @@ export interface MultiAgentRequest {
   mode: AgentMode;
   userInput: string;
   sessionId?: string;
+  images?: ImageAttachment[];
   roles?: SubAgentRole[];   // defaults to ["planner","analyst","critic","synthesiser"]
 }
 
@@ -92,6 +94,7 @@ async function runSubAgent(params: {
   originalRequest: string;
   priorContext: string;
   skillContext: string;
+  images?: ImageAttachment[];
 }): Promise<SubAgentResult> {
   const start = Date.now();
 
@@ -110,6 +113,7 @@ async function runSubAgent(params: {
     userInput: userMessage,
     usePremiumModel: params.mode === "report" || params.role === "synthesiser",
     maxTokens: params.role === "synthesiser" ? 8000 : 3000,
+    images: params.images,
   });
 
   return {
@@ -125,6 +129,15 @@ export async function runMultiAgent(
   request: MultiAgentRequest
 ): Promise<MultiAgentResponse> {
   const startTime = Date.now();
+
+  // Pre-flight budget check. Deep mode runs 4–5 sub-agents back-to-back, so
+  // catching an exhausted budget up front avoids partial runs that still cost
+  // money but produce no synthesised output.
+  const preflight = checkBudget();
+  if (!preflight.allowed) {
+    throw new BudgetExceededError(preflight.spentUSD, preflight.budgetUSD);
+  }
+
   const roles = request.roles ?? ["planner", "analyst", "critic", "synthesiser"];
   const skillContext = buildSkillContext(request.userInput);
   const steps: SubAgentResult[] = [];
@@ -137,6 +150,7 @@ export async function runMultiAgent(
       originalRequest: request.userInput,
       priorContext,
       skillContext,
+      images: request.images,
     });
 
     steps.push(result);

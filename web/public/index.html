@@ -364,7 +364,7 @@
         <div class="composer">
           <div class="upload-strip">
             <div class="row">
-              <input class="visually-hidden" id="fileInput" type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.xlsx" />
+              <input class="visually-hidden" id="fileInput" type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.xlsx,.png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp" />
               <button class="btn" id="uploadBtn" type="button">Upload files</button>
               <button class="btn" id="clearFilesBtn" type="button">Clear files</button>
             </div>
@@ -373,7 +373,7 @@
           <label class="visually-hidden" for="prompt">Message</label>
           <textarea id="prompt" placeholder="Describe your task, context, and preferred output... (Shift+Enter for a new line)"></textarea>
           <div class="composer-footer">
-            <span class="helper">Tip: pick a mode, select a session, upload files if needed, then ask for the exact output format.</span>
+            <span class="helper">Tip: pick a mode, select a session, upload files or images if needed, then ask for the exact output format.</span>
             <div class="row">
               <button class="btn" id="clearChatBtn" type="button">Clear chat</button>
               <button class="btn primary" id="sendBtn" type="button">Send message</button>
@@ -425,8 +425,10 @@
           <div class="field"><label for="audienceInput">Audience</label><input class="input" id="audienceInput" value="Business user" /></div>
           <div class="field"><label for="formatInput">Output format</label><input class="input" id="formatInput" value="Structured response" /></div>
           <div class="field"><label for="detailSelect">Detail level</label><select id="detailSelect"><option value="concise">Concise</option><option selected value="balanced">Balanced</option><option value="detailed">Detailed</option></select></div>
+          <div class="field"><label for="workflowSelect">Workflow</label><select id="workflowSelect"><option value="auto">Auto</option><option selected value="standard">Standard</option><option value="routing">Routing</option><option value="evaluator-optimizer">Evaluator optimizer</option><option value="human-approval">Human approval</option><option value="long-running">Long-running loop</option></select></div>
           <label class="check-row"><input id="assumptionsCheck" type="checkbox" checked /> Include assumptions</label>
           <label class="check-row"><input id="nextStepsCheck" type="checkbox" checked /> Include next steps</label>
+          <label class="check-row"><input id="dryRunToolsCheck" type="checkbox" /> Dry-run tools</label>
           <label class="check-row"><input id="deepCheck" type="checkbox" /> Deep multi-agent analysis</label>
           <button class="btn" id="saveSettingsBtn" type="button">Save settings</button>
         </div>
@@ -478,7 +480,9 @@
         detailLevel: $('detailSelect').value,
         includeAssumptions: $('assumptionsCheck').checked,
         includeNextSteps: $('nextStepsCheck').checked,
-        deepAnalysis: $('deepCheck').checked
+        deepAnalysis: $('deepCheck').checked,
+        workflowType: $('workflowSelect').value,
+        dryRunTools: $('dryRunToolsCheck').checked
       };
     }
 
@@ -489,6 +493,8 @@
       $('assumptionsCheck').checked = settings.includeAssumptions !== false;
       $('nextStepsCheck').checked = settings.includeNextSteps !== false;
       $('deepCheck').checked = !!settings.deepAnalysis;
+      $('workflowSelect').value = settings.workflowType || 'standard';
+      $('dryRunToolsCheck').checked = !!settings.dryRunTools;
     }
 
     function renderSuggestions() {
@@ -767,6 +773,9 @@
         tickers.forEach(clearTimeout);
         loading.classList.remove('loading');
         loading.querySelector('.bubble').textContent = data.response || data.error || 'No response received.';
+        if (data.workflowType && data.workflowSteps?.length) {
+          loading.querySelector('.bubble').textContent += `\n\nWorkflow: ${data.workflowType}\n` + data.workflowSteps.map((step, index) => `${index + 1}. ${step}`).join('\n');
+        }
         lastAgentOutput = data;
         const elapsedSeconds = ((data.elapsedMs ?? (performance.now() - requestStartTime)) / 1000).toFixed(1);
         const estimatedCost = Number(data.estimatedCostUSD ?? 0);
