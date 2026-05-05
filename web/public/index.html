@@ -7,23 +7,18 @@
   <style>
     :root {
       --bg: #0b1020;
-      --bg-soft: #11182b;
-      --panel: rgba(17, 24, 43, 0.88);
-      --panel-strong: #141d33;
-      --panel-border: rgba(255, 255, 255, 0.08);
-      --text: #ecf2ff;
-      --text-soft: #b4bfd8;
-      --text-dim: #7f8cab;
+      --panel: rgba(17, 24, 43, 0.9);
+      --panel-2: rgba(22, 31, 54, 0.92);
+      --border: rgba(255, 255, 255, 0.09);
+      --text: #eef4ff;
+      --muted: #aab7d4;
+      --dim: #7784a4;
       --primary: #5b8cff;
-      --primary-strong: #3c72f6;
-      --primary-soft: rgba(91, 140, 255, 0.16);
-      --success: #1bc47d;
-      --user: linear-gradient(135deg, #5b8cff, #7f6dff);
-      --shadow: 0 20px 45px rgba(0, 0, 0, 0.28);
-      --radius-xl: 22px;
-      --radius-lg: 18px;
-      --radius-md: 14px;
-      --radius-sm: 12px;
+      --primary-2: #7d68ff;
+      --good: #1bc47d;
+      --warn: #ffc857;
+      --danger: #ff6b6b;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,505 +26,228 @@
     body {
       min-height: 100vh;
       font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      background:
-        radial-gradient(circle at top left, rgba(91, 140, 255, 0.22), transparent 32%),
-        radial-gradient(circle at top right, rgba(127, 109, 255, 0.18), transparent 28%),
-        linear-gradient(180deg, #0b1020 0%, #0a0f1d 100%);
       color: var(--text);
-      display: flex;
-      align-items: stretch;
-      justify-content: center;
-      padding: 18px;
-    }
-
-    .app-shell {
-      width: min(1440px, 100%);
-      min-height: calc(100vh - 36px);
-      display: grid;
-      grid-template-columns: 300px minmax(0, 1fr);
-      background: rgba(9, 14, 27, 0.7);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-      border-radius: 28px;
-      overflow: hidden;
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
-    }
-
-    .sidebar {
-      background: rgba(11, 16, 32, 0.86);
-      border-right: 1px solid var(--panel-border);
-      padding: 24px 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    .brand {
-      display: flex;
-      align-items: flex-start;
-      gap: 14px;
-    }
-
-    .brand-mark {
-      width: 42px;
-      height: 42px;
-      border-radius: 14px;
-      background: linear-gradient(135deg, #5b8cff, #7f6dff);
-      display: grid;
-      place-items: center;
-      font-weight: 800;
-      color: white;
-      letter-spacing: 0.04em;
-      box-shadow: 0 10px 30px rgba(91, 140, 255, 0.35);
-      flex-shrink: 0;
-    }
-
-    .brand h1 {
-      font-size: 1.05rem;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-
-    .brand p {
-      color: var(--text-soft);
-      font-size: 0.92rem;
-      line-height: 1.5;
-    }
-
-    .sidebar-card {
-      background: var(--panel);
-      border: 1px solid var(--panel-border);
-      border-radius: var(--radius-lg);
+      background:
+        radial-gradient(circle at top left, rgba(91, 140, 255, 0.24), transparent 34%),
+        radial-gradient(circle at top right, rgba(125, 104, 255, 0.18), transparent 30%),
+        linear-gradient(180deg, #0b1020 0%, #08101f 100%);
       padding: 16px;
     }
 
-    .sidebar h2,
-    .sidebar-card h3 {
-      font-size: 0.96rem;
-      margin-bottom: 10px;
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .app-shell {
+      width: min(1540px, 100%);
+      min-height: calc(100vh - 32px);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr) 340px;
+      border: 1px solid var(--border);
+      border-radius: 28px;
+      overflow: hidden;
+      background: rgba(8, 13, 26, 0.72);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(16px);
     }
 
-    .mode-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
+    .sidebar, .inspector {
+      padding: 22px 18px;
+      background: rgba(9, 14, 28, 0.88);
+      overflow-y: auto;
     }
 
+    .sidebar { border-right: 1px solid var(--border); }
+    .inspector { border-left: 1px solid var(--border); }
+
+    .brand { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 18px; }
+    .brand-mark {
+      width: 42px; height: 42px; border-radius: 14px;
+      display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--primary), var(--primary-2));
+      font-weight: 800; letter-spacing: 0.04em;
+      box-shadow: 0 12px 30px rgba(91, 140, 255, 0.32);
+      flex-shrink: 0;
+    }
+    .brand h1 { font-size: 1.05rem; margin-bottom: 4px; }
+    .brand p { color: var(--muted); font-size: 0.86rem; line-height: 1.45; }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 15px;
+      margin-bottom: 14px;
+    }
+
+    .card h2, .card h3 { font-size: 0.95rem; margin-bottom: 11px; }
+    .card-header { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .card-header h3 { margin:0; }
+
+    .mode-list { display: grid; gap: 9px; }
     .mode-btn {
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(255, 255, 255, 0.02);
+      width: 100%; text-align: left;
+      border: 1px solid var(--border);
+      border-radius: 15px;
+      background: rgba(255,255,255,0.025);
       color: var(--text);
-      border-radius: 16px;
-      padding: 14px;
-      text-align: left;
-      cursor: pointer;
-      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+      padding: 13px;
+      transition: 0.18s ease;
+    }
+    .mode-btn strong { display:block; font-size:0.92rem; margin-bottom:3px; }
+    .mode-btn span { color: var(--muted); font-size:0.8rem; line-height:1.4; }
+    .mode-btn:hover, .mode-btn.active { border-color: rgba(91,140,255,0.55); background: rgba(91,140,255,0.12); }
+
+    .session-tools { display: flex; gap: 8px; margin-bottom: 10px; }
+    .session-tools input {
+      min-width: 0; flex: 1;
+      background: rgba(255,255,255,0.045);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px;
     }
 
-    .mode-btn:hover {
-      transform: translateY(-1px);
-      border-color: rgba(91, 140, 255, 0.45);
-      background: rgba(91, 140, 255, 0.08);
+    .conversation-list { display: grid; gap: 8px; max-height: 300px; overflow-y: auto; padding-right: 3px; }
+    .conversation-item {
+      width:100%; text-align:left;
+      padding: 11px;
+      border-radius: 13px;
+      border: 1px solid var(--border);
+      background: rgba(255,255,255,0.025);
+      color: var(--text);
     }
+    .conversation-item.active { border-color: rgba(91,140,255,0.65); background: rgba(91,140,255,0.12); }
+    .conversation-item strong { display:block; font-size:0.82rem; margin-bottom:4px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .conversation-item span { color: var(--muted); font-size:0.74rem; line-height:1.35; display:block; }
 
-    .mode-btn.active {
-      border-color: rgba(91, 140, 255, 0.6);
-      background: linear-gradient(180deg, rgba(91, 140, 255, 0.2), rgba(91, 140, 255, 0.08));
-      box-shadow: inset 0 0 0 1px rgba(91, 140, 255, 0.18);
-    }
-
-    .mode-btn strong {
-      display: block;
-      font-size: 0.94rem;
-      margin-bottom: 3px;
-    }
-
-    .mode-btn span {
-      display: block;
-      font-size: 0.83rem;
-      line-height: 1.45;
-      color: var(--text-soft);
-    }
-
-    .tips-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      color: var(--text-soft);
-      font-size: 0.87rem;
-      line-height: 1.5;
-      padding-left: 18px;
-    }
-
-    .main {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      background: linear-gradient(180deg, rgba(11, 16, 32, 0.58), rgba(17, 24, 43, 0.72));
-    }
+    .main { min-width: 0; display: flex; flex-direction: column; background: linear-gradient(180deg, rgba(13,20,38,0.62), rgba(14,22,42,0.8)); }
 
     .topbar {
-      padding: 22px 26px 16px;
-      border-bottom: 1px solid var(--panel-border);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 14px;
-      flex-wrap: wrap;
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--border);
+      display:flex; align-items:center; justify-content:space-between; gap: 16px; flex-wrap:wrap;
     }
+    .topbar h2 { font-size: 1.18rem; margin-bottom: 4px; }
+    .topbar p { color: var(--muted); font-size: 0.88rem; }
 
-    .topbar h2 {
-      font-size: 1.15rem;
-      margin-bottom: 4px;
-    }
-
-    .topbar p {
-      color: var(--text-soft);
-      font-size: 0.92rem;
-    }
-
-    .status-group {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-
+    .pill-row { display:flex; gap:9px; flex-wrap:wrap; }
     .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      border: 1px solid var(--panel-border);
-      background: rgba(255, 255, 255, 0.04);
-      border-radius: 999px;
-      padding: 9px 12px;
-      color: var(--text-soft);
-      font-size: 0.82rem;
-      min-height: 38px;
-    }
-
-    .pill .dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--text-dim);
-      box-shadow: 0 0 0 4px rgba(255,255,255,0.03);
-    }
-
-    .pill.success .dot { background: var(--success); }
-    .pill.mode-pill { color: #dce6ff; background: rgba(91, 140, 255, 0.12); }
-
-    .content {
-      min-height: 0;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      padding: 20px 26px 24px;
-      gap: 16px;
-    }
-
-    .suggestion-row {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .chip {
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      background: rgba(255, 255, 255, 0.03);
-      color: var(--text-soft);
-      border-radius: 999px;
-      padding: 10px 14px;
-      font-size: 0.84rem;
-      cursor: pointer;
-      transition: all 0.18s ease;
-    }
-
-    .chip:hover {
-      color: var(--text);
-      border-color: rgba(91, 140, 255, 0.36);
-      background: rgba(91, 140, 255, 0.09);
-    }
-
-    #chat {
-      flex: 1;
-      min-height: 0;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-      padding-right: 4px;
-    }
-
-    .welcome {
-      display: grid;
-      grid-template-columns: 1.15fr 0.95fr;
-      gap: 16px;
-    }
-
-    .hero-card,
-    .guide-card {
-      background: var(--panel);
-      border: 1px solid var(--panel-border);
-      border-radius: var(--radius-xl);
-      padding: 22px;
-    }
-
-    .hero-card {
-      background:
-        linear-gradient(135deg, rgba(91, 140, 255, 0.18), rgba(127, 109, 255, 0.12)),
-        var(--panel);
-    }
-
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      padding: 7px 12px;
-      border-radius: 999px;
-      background: rgba(255, 255, 255, 0.08);
-      color: #dbe6ff;
-      font-size: 0.78rem;
-      margin-bottom: 16px;
-    }
-
-    .hero-card h3 {
-      font-size: 1.55rem;
-      margin-bottom: 10px;
-      line-height: 1.2;
-    }
-
-    .hero-card p,
-    .guide-card p,
-    .guide-card li {
-      color: var(--text-soft);
-      line-height: 1.6;
-      font-size: 0.93rem;
-    }
-
-    .highlight-grid {
-      margin-top: 18px;
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-    }
-
-    .mini-stat {
-      background: rgba(255,255,255,0.05);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 16px;
-      padding: 14px;
-    }
-
-    .mini-stat strong {
-      display: block;
-      font-size: 1rem;
-      margin-bottom: 4px;
-    }
-
-    .mini-stat span {
-      color: var(--text-soft);
-      font-size: 0.82rem;
-      line-height: 1.45;
-    }
-
-    .guide-card h4 {
-      font-size: 1rem;
-      margin-bottom: 10px;
-    }
-
-    .guide-card ul {
-      padding-left: 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin: 10px 0 18px;
-    }
-
-    .message {
-      max-width: min(860px, 100%);
-      display: flex;
-      flex-direction: column;
-      gap: 7px;
-    }
-
-    .message.user {
-      align-self: flex-end;
-      align-items: flex-end;
-    }
-
-    .message.agent {
-      align-self: flex-start;
-      align-items: flex-start;
-    }
-
-    .message-meta {
-      font-size: 0.75rem;
-      color: var(--text-dim);
-      padding: 0 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-    }
-
-    .bubble {
-      width: fit-content;
-      max-width: 100%;
-      padding: 15px 18px;
-      border-radius: 18px;
-      line-height: 1.65;
-      font-size: 0.94rem;
-      white-space: pre-wrap;
-      word-break: break-word;
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .message.user .bubble {
-      color: #fff;
-      background: var(--user);
-      border: none;
-      border-bottom-right-radius: 8px;
-      box-shadow: 0 12px 28px rgba(91, 140, 255, 0.24);
-    }
-
-    .message.agent .bubble {
+      display:inline-flex; align-items:center; gap:7px;
+      min-height: 36px;
+      border:1px solid var(--border);
       background: rgba(255,255,255,0.04);
-      border-bottom-left-radius: 8px;
+      color: var(--muted);
+      border-radius:999px;
+      padding: 8px 11px;
+      font-size:0.8rem;
     }
+    .dot { width:9px; height:9px; border-radius:50%; background:var(--dim); }
+    .success .dot { background: var(--good); }
 
-    .message.agent.loading .bubble {
-      color: var(--text-soft);
-      font-style: italic;
-      background: rgba(255,255,255,0.035);
+    .chat-area { flex: 1; min-height: 0; display:flex; flex-direction:column; gap:14px; padding: 18px 24px 22px; }
+    .suggestions { display:flex; gap:8px; flex-wrap:wrap; }
+    .chip {
+      border:1px solid var(--border); background:rgba(255,255,255,0.035); color:var(--muted);
+      border-radius:999px; padding:9px 12px; font-size:0.81rem;
     }
+    .chip:hover { color:var(--text); border-color:rgba(91,140,255,0.45); background:rgba(91,140,255,0.1); }
+
+    #chat { flex:1; min-height: 0; overflow-y:auto; display:flex; flex-direction:column; gap:16px; padding-right:4px; }
+    .welcome { display:grid; grid-template-columns: 1.2fr 0.8fr; gap:14px; }
+    .hero, .guide { background: var(--panel); border:1px solid var(--border); border-radius:22px; padding:22px; }
+    .hero { background: linear-gradient(135deg, rgba(91,140,255,0.18), rgba(125,104,255,0.12)), var(--panel); }
+    .eyebrow { display:inline-flex; border-radius:999px; padding:7px 11px; background:rgba(255,255,255,0.08); color:#dce6ff; font-size:0.77rem; margin-bottom:14px; }
+    .hero h3 { font-size:1.55rem; line-height:1.2; margin-bottom:10px; }
+    .hero p, .guide p, .guide li { color: var(--muted); line-height:1.6; font-size:0.9rem; }
+    .feature-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; margin-top:16px; }
+    .feature { border:1px solid var(--border); background:rgba(255,255,255,0.045); border-radius:15px; padding:12px; }
+    .feature strong { display:block; font-size:0.86rem; margin-bottom:4px; }
+    .feature span { color:var(--muted); font-size:0.77rem; line-height:1.4; }
+    .guide ul { padding-left:18px; margin:10px 0 14px; display:grid; gap:8px; }
+
+    .message { max-width:min(860px,100%); display:flex; flex-direction:column; gap:6px; }
+    .message.user { align-self:flex-end; align-items:flex-end; }
+    .message.agent { align-self:flex-start; align-items:flex-start; }
+    .message-meta { color:var(--dim); font-size:0.72rem; letter-spacing:0.04em; text-transform:uppercase; padding:0 3px; }
+    .bubble { padding:15px 17px; border-radius:18px; line-height:1.62; font-size:0.92rem; white-space:pre-wrap; word-break:break-word; border:1px solid var(--border); }
+    .message.user .bubble { background:linear-gradient(135deg,var(--primary),var(--primary-2)); border:none; border-bottom-right-radius:7px; color:white; }
+    .message.agent .bubble { background:rgba(255,255,255,0.045); border-bottom-left-radius:7px; }
+    .message.loading .bubble { color:var(--muted); font-style:italic; }
+    .message-actions { display:flex; flex-wrap:wrap; gap:7px; margin-top:4px; }
 
     .composer {
-      border: 1px solid var(--panel-border);
-      background: rgba(9, 14, 27, 0.74);
-      border-radius: 22px;
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      box-shadow: 0 16px 34px rgba(0, 0, 0, 0.16);
+      border:1px solid var(--border); border-radius:22px; background:rgba(8,13,26,0.78);
+      padding:14px; display:grid; gap:12px;
     }
-
-    .composer textarea {
-      width: 100%;
-      background: transparent;
-      border: none;
-      color: var(--text);
-      font-size: 0.95rem;
-      resize: none;
-      min-height: 72px;
-      max-height: 220px;
-      outline: none;
-      font-family: inherit;
-      line-height: 1.6;
+    .upload-strip { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .attached-files { display:flex; gap:7px; flex-wrap:wrap; }
+    .file-pill { display:inline-flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:999px; padding:7px 9px; color:var(--muted); font-size:0.78rem; background:rgba(255,255,255,0.035); }
+    .file-pill button { border:none; background:transparent; color:var(--danger); font-weight:700; }
+    textarea {
+      width:100%; min-height:82px; max-height:230px; resize:none; outline:none; border:none; background:transparent; color:var(--text); line-height:1.6;
     }
+    textarea::placeholder { color: var(--dim); }
+    .composer-footer { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .helper { color:var(--dim); font-size:0.79rem; line-height:1.45; }
 
-    .composer textarea::placeholder { color: var(--text-dim); }
-
-    .composer-footer {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
+    .btn {
+      border:1px solid var(--border); border-radius:13px; padding:10px 12px;
+      background:rgba(255,255,255,0.055); color:var(--text); font-size:0.84rem;
     }
+    .btn:hover { background:rgba(255,255,255,0.09); }
+    .btn.primary { border:none; background:var(--primary); color:white; min-width:125px; }
+    .btn.primary:hover { background:#3f75ed; }
+    .btn.danger { color:#ffd6d6; border-color:rgba(255,107,107,0.28); background:rgba(255,107,107,0.08); }
+    .btn.small { padding:7px 9px; font-size:0.75rem; border-radius:10px; }
+    .btn:disabled { opacity:0.55; cursor:not-allowed; }
 
-    .helper-text {
-      color: var(--text-dim);
-      font-size: 0.82rem;
-      line-height: 1.5;
+    .input, select {
+      width:100%; background:rgba(255,255,255,0.045); border:1px solid var(--border); color:var(--text); border-radius:12px; padding:10px; outline:none;
     }
+    select option { color: #111827; }
+    .settings-grid { display:grid; gap:10px; }
+    .field label { display:block; color:var(--muted); font-size:0.75rem; margin-bottom:5px; }
+    .check-row { display:flex; align-items:center; gap:9px; color:var(--muted); font-size:0.82rem; }
 
-    .send-row {
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    .usage-grid { display:grid; grid-template-columns: 1fr 1fr; gap:8px; }
+    .metric { border:1px solid var(--border); border-radius:14px; padding:11px; background:rgba(255,255,255,0.035); }
+    .metric strong { display:block; font-size:1rem; margin-bottom:3px; }
+    .metric span { color:var(--muted); font-size:0.75rem; }
+
+    .progress-list, .review-list, .outputs-list { display:grid; gap:8px; max-height:220px; overflow:auto; padding-right:3px; }
+    .progress-step { display:flex; gap:9px; align-items:flex-start; color:var(--muted); font-size:0.82rem; line-height:1.4; }
+    .step-dot { width:10px; height:10px; margin-top:4px; border-radius:50%; background:var(--dim); flex-shrink:0; }
+    .progress-step.active { color:var(--text); }
+    .progress-step.active .step-dot { background:var(--primary); box-shadow:0 0 0 4px rgba(91,140,255,0.12); }
+    .progress-step.done .step-dot { background:var(--good); }
+
+    .review-item, .output-item {
+      border:1px solid var(--border); background:rgba(255,255,255,0.035); border-radius:14px; padding:11px;
     }
+    .review-item strong, .output-item strong { display:block; font-size:0.8rem; margin-bottom:5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .review-item p, .output-item p { color:var(--muted); font-size:0.75rem; line-height:1.4; margin-bottom:8px; }
+    .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .tag { display:inline-flex; padding:4px 7px; border-radius:999px; background:rgba(91,140,255,0.11); color:#dce6ff; font-size:0.7rem; }
+    .tag.warn { background:rgba(255,200,87,0.12); color:#ffe6a3; }
 
-    .ghost-btn,
-    #sendBtn {
-      border: none;
-      border-radius: 14px;
-      padding: 12px 16px;
-      font-size: 0.9rem;
-      cursor: pointer;
-      transition: transform 0.16s ease, background 0.16s ease, opacity 0.16s ease;
+    .hidden { display:none !important; }
+    .visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); border:0; }
+
+    @media (max-width: 1250px) {
+      .app-shell { grid-template-columns: 300px minmax(0, 1fr); }
+      .inspector { grid-column: 1 / -1; border-left:none; border-top:1px solid var(--border); display:grid; grid-template-columns: repeat(3, 1fr); gap:14px; }
+      .inspector .card { margin-bottom:0; }
     }
-
-    .ghost-btn {
-      background: rgba(255, 255, 255, 0.06);
-      color: var(--text-soft);
-      border: 1px solid rgba(255,255,255,0.08);
-    }
-
-    .ghost-btn:hover { background: rgba(255,255,255,0.09); }
-
-    #sendBtn {
-      background: var(--primary-strong);
-      color: white;
-      min-width: 120px;
-    }
-
-    #sendBtn:hover { transform: translateY(-1px); background: #285ee2; }
-    #sendBtn:disabled { cursor: not-allowed; opacity: 0.55; transform: none; }
-
-    .visually-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip: rect(0, 0, 0, 0);
-      border: 0;
-    }
-
-    @media (max-width: 1120px) {
-      .app-shell {
-        grid-template-columns: 1fr;
-      }
-
-      .sidebar {
-        border-right: none;
-        border-bottom: 1px solid var(--panel-border);
-      }
-
-      .welcome {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    @media (max-width: 760px) {
-      body { padding: 0; }
-      .app-shell {
-        min-height: 100vh;
-        border-radius: 0;
-      }
-
-      .topbar,
-      .content,
-      .sidebar {
-        padding-left: 16px;
-        padding-right: 16px;
-      }
-
-      .highlight-grid {
-        grid-template-columns: 1fr;
-      }
-
-      .composer-footer {
-        align-items: stretch;
-      }
-
-      .send-row {
-        width: 100%;
-        justify-content: space-between;
-      }
-
-      #sendBtn { flex: 1; }
+    @media (max-width: 900px) {
+      body { padding:0; }
+      .app-shell { min-height:100vh; border-radius:0; grid-template-columns:1fr; }
+      .sidebar { border-right:none; border-bottom:1px solid var(--border); }
+      .inspector { grid-template-columns:1fr; }
+      .welcome { grid-template-columns:1fr; }
+      .feature-grid { grid-template-columns:1fr; }
+      .composer-footer, .upload-strip { align-items:stretch; }
+      .btn.primary { width:100%; }
     }
   </style>
 </head>
@@ -540,40 +258,27 @@
         <div class="brand-mark">STY</div>
         <div>
           <h1>STY AI Agent</h1>
-          <p>Business-focused AI support for finance, analytics, reporting, and structured problem-solving.</p>
+          <p>Finance, data, reporting, file-aware workflows, review queue, and saved outputs.</p>
         </div>
       </div>
 
-      <div class="sidebar-card">
+      <div class="card">
         <h3>Modes</h3>
         <div class="mode-list">
-          <button class="mode-btn active" data-mode="general">
-            <strong>General</strong>
-            <span>Everyday writing, planning, research support, and quick task help.</span>
-          </button>
-          <button class="mode-btn" data-mode="finance">
-            <strong>Finance</strong>
-            <span>Valuation, WACC, ratios, investment analysis, and finance explanations.</span>
-          </button>
-          <button class="mode-btn" data-mode="data">
-            <strong>Data</strong>
-            <span>EDA, model ideas, feature engineering, interpretation, and analytics workflows.</span>
-          </button>
-          <button class="mode-btn" data-mode="report">
-            <strong>Report</strong>
-            <span>Executive summaries, polished writing, business recommendations, and presentation-ready outputs.</span>
-          </button>
+          <button class="mode-btn active" data-mode="general"><strong>General</strong><span>Writing, planning, research support, and quick tasks.</span></button>
+          <button class="mode-btn" data-mode="finance"><strong>Finance</strong><span>WACC, valuation, ratios, investment analysis, and risk.</span></button>
+          <button class="mode-btn" data-mode="data"><strong>Data</strong><span>EDA, modelling, features, interpretation, and workflows.</span></button>
+          <button class="mode-btn" data-mode="report"><strong>Report</strong><span>Executive summaries, recommendations, and slide-ready writing.</span></button>
         </div>
       </div>
 
-      <div class="sidebar-card">
-        <h3>Tips for better answers</h3>
-        <ul class="tips-list">
-          <li>State your goal and who the audience is.</li>
-          <li>Paste context, assumptions, or constraints.</li>
-          <li>Ask for a format: bullet points, email, report, table, or script.</li>
-          <li>Use the correct mode before sending.</li>
-        </ul>
+      <div class="card">
+        <div class="card-header"><h3>Session selection</h3><button class="btn small" id="refreshSessionsBtn">Refresh</button></div>
+        <div class="session-tools">
+          <input id="sessionInput" placeholder="session-id" />
+          <button class="btn small" id="newSessionBtn">New</button>
+        </div>
+        <div class="conversation-list" id="conversationList"></div>
       </div>
     </aside>
 
@@ -581,228 +286,454 @@
       <header class="topbar">
         <div>
           <h2>Ask better. Decide faster.</h2>
-          <p>A clearer interface for structured, business-ready AI outputs.</p>
+          <p>Upload files, choose a session, track progress, review cost, and download outputs.</p>
         </div>
-        <div class="status-group">
-          <div class="pill success" id="healthPill"><span class="dot"></span><span id="healthText">Checking connection...</span></div>
-          <div class="pill mode-pill"><span>Mode:</span> <strong id="currentModeLabel">General</strong></div>
+        <div class="pill-row">
+          <span class="pill success" id="healthPill"><span class="dot"></span><span id="healthText">Checking</span></span>
+          <span class="pill"><span>Mode:</span><strong id="modeLabel">General</strong></span>
+          <span class="pill"><span>Session:</span><strong id="sessionLabel">none</strong></span>
         </div>
       </header>
 
-      <section class="content">
-        <div class="suggestion-row" id="suggestions"></div>
+      <section class="chat-area">
+        <div class="suggestions" id="suggestions"></div>
 
         <section id="chat">
           <div class="welcome" id="welcomeState">
-            <div class="hero-card">
-              <div class="eyebrow">Designed for finance, data, and reporting work</div>
-              <h3>What do you need help with today?</h3>
-              <p>Choose a mode, ask a question, and get a more structured response. This interface is designed to make the agent feel more trustworthy, easier to use, and easier to understand.</p>
-              <div class="highlight-grid">
-                <div class="mini-stat">
-                  <strong>Mode-aware</strong>
-                  <span>Different modes guide the agent toward more relevant outputs.</span>
-                </div>
-                <div class="mini-stat">
-                  <strong>Clearer UI</strong>
-                  <span>Better hierarchy, cleaner message styling, and less visual clutter.</span>
-                </div>
-                <div class="mini-stat">
-                  <strong>Accessible</strong>
-                  <span>Improved contrast, spacing, and button visibility for easier use.</span>
-                </div>
+            <div class="hero">
+              <span class="eyebrow">Full workflow web interface</span>
+              <h3>Run the agent from a clearer, more complete workspace.</h3>
+              <p>This page now supports uploaded file context, previous conversations, session-aware chat, visible review queue, usage/cost display, saved output downloads, and progress steps while the agent is working.</p>
+              <div class="feature-grid">
+                <div class="feature"><strong>Upload files</strong><span>Attach documents before asking questions.</span></div>
+                <div class="feature"><strong>Save outputs</strong><span>Download answers as Markdown, Word, PDF, Excel, or notebook files.</span></div>
+                <div class="feature"><strong>Review queue</strong><span>See outputs that need human approval.</span></div>
               </div>
             </div>
-
-            <div class="guide-card">
-              <h4>Try prompts like these</h4>
+            <div class="guide">
+              <h3>Try this</h3>
               <ul>
-                <li>Summarise the key findings of this dataset for a manager in plain English.</li>
-                <li>Explain WACC simply and provide a worked example.</li>
-                <li>Turn my messy notes into a professional executive summary.</li>
-                <li>Suggest feature engineering ideas to improve model performance.</li>
+                <li>Upload a file and ask for a manager-friendly summary.</li>
+                <li>Choose Finance mode and request a WACC explanation.</li>
+                <li>Use Report mode and download the result as a PDF.</li>
               </ul>
-              <p>Tip: the more context you provide, the better the answer will be.</p>
+              <p>Use advanced settings on the right to control audience, format, and detail level.</p>
             </div>
           </div>
         </section>
 
         <div class="composer">
+          <div class="upload-strip">
+            <div class="row">
+              <input class="visually-hidden" id="fileInput" type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.xlsx" />
+              <button class="btn" id="uploadBtn" type="button">Upload files</button>
+              <button class="btn" id="clearFilesBtn" type="button">Clear files</button>
+            </div>
+            <div class="attached-files" id="attachedFiles"></div>
+          </div>
           <label class="visually-hidden" for="prompt">Message</label>
           <textarea id="prompt" placeholder="Describe your task, context, and preferred output... (Shift+Enter for a new line)"></textarea>
           <div class="composer-footer">
-            <div class="helper-text">Best results come from a clear objective, context, and desired output format.</div>
-            <div class="send-row">
-              <button class="ghost-btn" id="clearBtn" type="button">Clear chat</button>
-              <button id="sendBtn" type="button">Send message</button>
+            <span class="helper">Tip: pick a mode, select a session, upload files if needed, then ask for the exact output format.</span>
+            <div class="row">
+              <button class="btn" id="clearChatBtn" type="button">Clear chat</button>
+              <button class="btn primary" id="sendBtn" type="button">Send message</button>
             </div>
           </div>
         </div>
       </section>
     </main>
+
+    <aside class="inspector">
+      <div class="card">
+        <div class="card-header"><h3>Progress steps</h3><button class="btn small" id="resetProgressBtn">Reset</button></div>
+        <div class="progress-list" id="progressList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>Cost usage</h3><button class="btn small" id="refreshUsageBtn">Refresh</button></div>
+        <div class="usage-grid">
+          <div class="metric"><strong id="costToday">$0.0000</strong><span>Today</span></div>
+          <div class="metric"><strong id="callsToday">0</strong><span>Calls</span></div>
+          <div class="metric"><strong id="budgetLeft">$0.00</strong><span>Budget left</span></div>
+          <div class="metric"><strong id="tokensToday">0</strong><span>Tokens est.</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>Saved outputs</h3><button class="btn small" id="refreshOutputsBtn">Refresh</button></div>
+        <div class="row" style="margin-bottom:10px;">
+          <select id="downloadFormat" aria-label="Download format">
+            <option value="md">Markdown</option>
+            <option value="txt">Text</option>
+            <option value="docx">Word</option>
+            <option value="pdf">PDF</option>
+            <option value="xlsx">Excel</option>
+            <option value="ipynb">Notebook</option>
+          </select>
+        </div>
+        <div class="outputs-list" id="outputsList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>Review queue</h3><button class="btn small" id="refreshReviewBtn">Refresh</button></div>
+        <div class="review-list" id="reviewList"></div>
+      </div>
+
+      <div class="card">
+        <h3>Advanced settings</h3>
+        <div class="settings-grid">
+          <div class="field"><label for="audienceInput">Audience</label><input class="input" id="audienceInput" value="Business user" /></div>
+          <div class="field"><label for="formatInput">Output format</label><input class="input" id="formatInput" value="Structured response" /></div>
+          <div class="field"><label for="detailSelect">Detail level</label><select id="detailSelect"><option value="concise">Concise</option><option selected value="balanced">Balanced</option><option value="detailed">Detailed</option></select></div>
+          <label class="check-row"><input id="assumptionsCheck" type="checkbox" checked /> Include assumptions</label>
+          <label class="check-row"><input id="nextStepsCheck" type="checkbox" checked /> Include next steps</label>
+          <label class="check-row"><input id="deepCheck" type="checkbox" /> Deep multi-agent analysis</label>
+          <button class="btn" id="saveSettingsBtn" type="button">Save settings</button>
+        </div>
+      </div>
+    </aside>
   </div>
 
   <script>
     const modeMeta = {
-      general: {
-        label: 'General',
-        prompts: [
-          'Rewrite this email to sound more professional and concise.',
-          'Create a step-by-step action plan for this project.',
-          'Summarise this information for a non-technical audience.'
-        ]
-      },
-      finance: {
-        label: 'Finance',
-        prompts: [
-          'Explain WACC in simple terms and provide a numeric example.',
-          'Summarise the investment risks and opportunities from these notes.',
-          'Turn this financial analysis into board-ready bullet points.'
-        ]
-      },
-      data: {
-        label: 'Data',
-        prompts: [
-          'Summarise the likely data quality issues in this dataset.',
-          'Suggest feature engineering ideas to improve model performance.',
-          'Explain these model results in plain English for stakeholders.'
-        ]
-      },
-      report: {
-        label: 'Report',
-        prompts: [
-          'Turn these notes into an executive summary with recommendations.',
-          'Write a professional report introduction for this business case.',
-          'Create a clear slide-ready summary of the main findings.'
-        ]
-      }
+      general: { label: 'General', prompts: ['Rewrite this email professionally.', 'Create an action plan for this project.', 'Summarise this for a non-technical audience.'] },
+      finance: { label: 'Finance', prompts: ['Explain WACC with a simple example.', 'Summarise these investment risks.', 'Turn this analysis into board-ready bullets.'] },
+      data: { label: 'Data', prompts: ['Summarise likely data quality issues.', 'Suggest feature engineering ideas.', 'Explain these model results for stakeholders.'] },
+      report: { label: 'Report', prompts: ['Write an executive summary.', 'Create a report introduction.', 'Create slide-ready key findings.'] }
     };
 
+    const progressSteps = [
+      'Prepare request and attached file context',
+      'Send request to the web server',
+      'Run selected agent mode and skills',
+      'Score confidence, update session, and queue review if needed',
+      'Return response and refresh usage/output panels'
+    ];
+
     let currentMode = 'general';
-    const chat = document.getElementById('chat');
-    const promptEl = document.getElementById('prompt');
-    const sendBtn = document.getElementById('sendBtn');
-    const clearBtn = document.getElementById('clearBtn');
-    const currentModeLabel = document.getElementById('currentModeLabel');
-    const suggestionsEl = document.getElementById('suggestions');
-    const welcomeState = document.getElementById('welcomeState');
-    const healthPill = document.getElementById('healthPill');
-    const healthText = document.getElementById('healthText');
+    let selectedSessionId = '';
+    let uploadedFiles = [];
+    let lastAgentOutput = null;
+
+    const $ = id => document.getElementById(id);
+    const chat = $('chat');
+    const welcomeState = $('welcomeState');
+    const promptEl = $('prompt');
+    const sendBtn = $('sendBtn');
 
     document.querySelectorAll('.mode-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         currentMode = btn.dataset.mode;
-        currentModeLabel.textContent = modeMeta[currentMode].label;
+        $('modeLabel').textContent = modeMeta[currentMode].label;
         renderSuggestions();
       });
     });
 
+    function getSettingsFromUi() {
+      return {
+        audience: $('audienceInput').value.trim() || 'Business user',
+        outputFormat: $('formatInput').value.trim() || 'Structured response',
+        detailLevel: $('detailSelect').value,
+        includeAssumptions: $('assumptionsCheck').checked,
+        includeNextSteps: $('nextStepsCheck').checked,
+        deepAnalysis: $('deepCheck').checked
+      };
+    }
+
+    function setSettingsUi(settings) {
+      $('audienceInput').value = settings.audience || 'Business user';
+      $('formatInput').value = settings.outputFormat || 'Structured response';
+      $('detailSelect').value = settings.detailLevel || 'balanced';
+      $('assumptionsCheck').checked = settings.includeAssumptions !== false;
+      $('nextStepsCheck').checked = settings.includeNextSteps !== false;
+      $('deepCheck').checked = !!settings.deepAnalysis;
+    }
+
     function renderSuggestions() {
-      suggestionsEl.innerHTML = '';
-      modeMeta[currentMode].prompts.forEach(prompt => {
+      $('suggestions').innerHTML = '';
+      modeMeta[currentMode].prompts.forEach(text => {
         const chip = document.createElement('button');
         chip.className = 'chip';
         chip.type = 'button';
-        chip.textContent = prompt;
-        chip.addEventListener('click', () => {
-          promptEl.value = prompt;
-          autoResize();
-          promptEl.focus();
-        });
-        suggestionsEl.appendChild(chip);
+        chip.textContent = text;
+        chip.addEventListener('click', () => { promptEl.value = text; resizePrompt(); promptEl.focus(); });
+        $('suggestions').appendChild(chip);
       });
     }
 
-    function autoResize() {
-      promptEl.style.height = 'auto';
-      promptEl.style.height = Math.min(promptEl.scrollHeight, 220) + 'px';
+    function renderProgress(activeIndex = -1, doneThrough = -1) {
+      $('progressList').innerHTML = '';
+      progressSteps.forEach((step, index) => {
+        const div = document.createElement('div');
+        div.className = 'progress-step' + (index === activeIndex ? ' active' : '') + (index <= doneThrough ? ' done' : '');
+        div.innerHTML = `<span class="step-dot"></span><span>${step}</span>`;
+        $('progressList').appendChild(div);
+      });
     }
 
-    promptEl.addEventListener('input', autoResize);
-
-    promptEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-
-    sendBtn.addEventListener('click', sendMessage);
-    clearBtn.addEventListener('click', clearChat);
-
-    function clearChat() {
-      chat.innerHTML = '';
-      chat.appendChild(welcomeState);
-      promptEl.focus();
+    function clearWelcome() {
+      if (welcomeState && welcomeState.parentNode === chat) welcomeState.remove();
     }
 
-    function clearWelcomeState() {
-      if (welcomeState && welcomeState.parentNode === chat) {
-        welcomeState.remove();
-      }
-    }
-
-    function createMessage(text, type, metaLabel) {
-      clearWelcomeState();
-      const wrapper = document.createElement('div');
-      wrapper.className = `message ${type}`;
-
-      const meta = document.createElement('div');
-      meta.className = 'message-meta';
-      meta.textContent = metaLabel;
-
+    function createMessage(text, type, meta) {
+      clearWelcome();
+      const msg = document.createElement('div');
+      msg.className = `message ${type}`;
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'message-meta';
+      metaDiv.textContent = meta;
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
       bubble.textContent = text;
-
-      wrapper.appendChild(meta);
-      wrapper.appendChild(bubble);
-      chat.appendChild(wrapper);
+      msg.appendChild(metaDiv);
+      msg.appendChild(bubble);
+      chat.appendChild(msg);
       chat.scrollTop = chat.scrollHeight;
-      return wrapper;
+      return msg;
     }
 
-    async function checkHealth() {
+    function addOutputActions(messageEl, output) {
+      const actions = document.createElement('div');
+      actions.className = 'message-actions';
+      ['md', 'docx', 'pdf', 'xlsx', 'ipynb'].forEach(format => {
+        const btn = document.createElement('button');
+        btn.className = 'btn small';
+        btn.textContent = `Download ${format.toUpperCase()}`;
+        btn.addEventListener('click', () => saveOutput(format, output));
+        actions.appendChild(btn);
+      });
+      messageEl.appendChild(actions);
+    }
+
+    function resizePrompt() {
+      promptEl.style.height = 'auto';
+      promptEl.style.height = Math.min(promptEl.scrollHeight, 230) + 'px';
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(path, options);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Request failed: ${path}`);
+      return data;
+    }
+
+    function setSession(id) {
+      selectedSessionId = id || '';
+      $('sessionInput').value = selectedSessionId;
+      $('sessionLabel').textContent = selectedSessionId || 'none';
+      document.querySelectorAll('.conversation-item').forEach(item => item.classList.toggle('active', item.dataset.id === selectedSessionId));
+    }
+
+    async function loadSessions() {
+      const list = $('conversationList');
+      list.innerHTML = '<span class="helper">Loading sessions...</span>';
       try {
-        const res = await fetch('/api/health');
-        if (!res.ok) throw new Error('Health check failed');
-        healthPill.classList.add('success');
-        healthText.textContent = 'Connected';
-      } catch (e) {
-        healthPill.classList.remove('success');
-        healthText.textContent = 'Offline';
+        const data = await api('/api/sessions');
+        list.innerHTML = '';
+        if (!data.sessions.length) {
+          list.innerHTML = '<span class="helper">No saved sessions yet.</span>';
+          return;
+        }
+        data.sessions.forEach(session => {
+          const btn = document.createElement('button');
+          btn.className = 'conversation-item' + (session.id === selectedSessionId ? ' active' : '');
+          btn.dataset.id = session.id;
+          const updated = new Date(session.updatedAt).toLocaleString();
+          btn.innerHTML = `<strong>${session.id}</strong><span>${session.mode} · ${Math.round(session.messageCount / 2)} turn(s)</span><span>${updated}</span>`;
+          btn.addEventListener('click', () => loadSession(session.id));
+          list.appendChild(btn);
+        });
+      } catch (err) {
+        list.innerHTML = `<span class="helper">${err.message}</span>`;
       }
+    }
+
+    async function loadSession(id) {
+      const data = await api(`/api/sessions/${encodeURIComponent(id)}`);
+      setSession(data.id);
+      chat.innerHTML = '';
+      data.messages.forEach(message => {
+        createMessage(message.content, message.role === 'user' ? 'user' : 'agent', message.role === 'user' ? 'You' : `${data.mode} mode`);
+      });
+    }
+
+    async function loadUsage() {
+      try {
+        const data = await api('/api/usage');
+        $('costToday').textContent = `$${Number(data.today.totalCostUSD || 0).toFixed(4)}`;
+        $('callsToday').textContent = data.today.totalCalls || 0;
+        $('budgetLeft').textContent = `$${Number(data.budget.remainingUSD || 0).toFixed(2)}`;
+        const tokens = Number(data.today.totalInputTokens || 0) + Number(data.today.totalOutputTokens || 0);
+        $('tokensToday').textContent = tokens.toLocaleString();
+      } catch {
+        $('costToday').textContent = 'Error';
+      }
+    }
+
+    async function loadReviewQueue() {
+      const list = $('reviewList');
+      list.innerHTML = '<span class="helper">Loading review queue...</span>';
+      try {
+        const data = await api('/api/review?status=all');
+        list.innerHTML = '';
+        if (!data.items.length) {
+          list.innerHTML = '<span class="helper">No review items.</span>';
+          return;
+        }
+        data.items.slice(0, 8).forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'review-item';
+          div.innerHTML = `
+            <strong>${item.mode} · ${item.confidence?.tier || 'Unknown'} confidence</strong>
+            <p>${item.userInput.slice(0, 120)}${item.userInput.length > 120 ? '...' : ''}</p>
+            <div class="row">
+              <span class="tag ${item.status === 'pending' ? 'warn' : ''}">${item.status}</span>
+              ${item.status === 'pending' ? `<button class="btn small" data-action="approve">Approve</button><button class="btn small danger" data-action="reject">Reject</button>` : ''}
+            </div>`;
+          div.querySelector('[data-action="approve"]')?.addEventListener('click', async () => { await api(`/api/review/${item.id}/approve`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reviewedBy:'web-user' }) }); loadReviewQueue(); });
+          div.querySelector('[data-action="reject"]')?.addEventListener('click', async () => { await api(`/api/review/${item.id}/reject`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ reviewedBy:'web-user' }) }); loadReviewQueue(); });
+          list.appendChild(div);
+        });
+      } catch (err) {
+        list.innerHTML = `<span class="helper">${err.message}</span>`;
+      }
+    }
+
+    async function loadOutputs() {
+      const list = $('outputsList');
+      list.innerHTML = '<span class="helper">Loading outputs...</span>';
+      try {
+        const data = await api('/api/outputs');
+        list.innerHTML = '';
+        if (!data.outputs.length) {
+          list.innerHTML = '<span class="helper">No saved outputs yet.</span>';
+          return;
+        }
+        data.outputs.slice(0, 8).forEach(output => {
+          const div = document.createElement('div');
+          div.className = 'output-item';
+          div.innerHTML = `<strong>${output.fileName}</strong><p>${Math.ceil(output.sizeBytes / 1024)} KB · ${new Date(output.createdAt).toLocaleString()}</p><a class="btn small" href="${output.downloadUrl}">Download</a>`;
+          list.appendChild(div);
+        });
+      } catch (err) {
+        list.innerHTML = `<span class="helper">${err.message}</span>`;
+      }
+    }
+
+    async function saveOutput(format, output = lastAgentOutput) {
+      if (!output) return alert('No agent output available to save yet.');
+      const data = await api('/api/save-output', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: output.title || 'STY Agent Output',
+          summary: output.response,
+          nextSteps: output.nextSteps || [],
+          format
+        })
+      });
+      await loadOutputs();
+      window.location.href = data.downloadUrl;
+    }
+
+    function renderAttachedFiles() {
+      const box = $('attachedFiles');
+      box.innerHTML = '';
+      uploadedFiles.forEach(file => {
+        const pill = document.createElement('span');
+        pill.className = 'file-pill';
+        pill.innerHTML = `${file.fileName}${file.warning ? ' ⚠' : ''} <button type="button" aria-label="Remove ${file.fileName}">×</button>`;
+        pill.querySelector('button').addEventListener('click', () => {
+          uploadedFiles = uploadedFiles.filter(f => f.id !== file.id);
+          renderAttachedFiles();
+        });
+        box.appendChild(pill);
+      });
+    }
+
+    function readFileAsBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result).split(',')[1]);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(file);
+      });
+    }
+
+    async function handleFiles(files) {
+      renderProgress(0, -1);
+      for (const file of files) {
+        const lower = file.name.toLowerCase();
+        const isText = lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.csv') || lower.endsWith('.json');
+        const payload = { fileName: file.name };
+        if (isText) payload.textContent = await readFileAsText(file);
+        else payload.dataBase64 = await readFileAsBase64(file);
+        const uploaded = await api('/api/upload', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        uploadedFiles.push(uploaded);
+      }
+      renderAttachedFiles();
+      renderProgress(-1, 0);
     }
 
     async function sendMessage() {
       const prompt = promptEl.value.trim();
       if (!prompt) return;
 
+      const sessionTyped = $('sessionInput').value.trim();
+      if (sessionTyped) setSession(sessionTyped);
+
       promptEl.value = '';
-      autoResize();
+      resizePrompt();
       sendBtn.disabled = true;
-      sendBtn.textContent = 'Sending...';
+      sendBtn.textContent = 'Running...';
+      renderProgress(0, -1);
 
       createMessage(prompt, 'user', 'You');
-      const loadingMsg = createMessage('Thinking through your request...', 'agent loading', `${modeMeta[currentMode].label} mode`);
+      const loading = createMessage('Preparing your request...', 'agent loading', `${modeMeta[currentMode].label} mode`);
+
+      const tickers = [
+        setTimeout(() => { renderProgress(1, 0); loading.querySelector('.bubble').textContent = 'Sending request to the server...'; }, 350),
+        setTimeout(() => { renderProgress(2, 1); loading.querySelector('.bubble').textContent = 'Running the selected agent mode and skills...'; }, 1000),
+        setTimeout(() => { renderProgress(3, 2); loading.querySelector('.bubble').textContent = 'Checking confidence and updating session records...'; }, 2000)
+      ];
 
       try {
-        const res = await fetch('/api/ask', {
+        const data = await api('/api/ask', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode: currentMode, prompt }),
+          body: JSON.stringify({
+            mode: currentMode,
+            prompt,
+            sessionId: selectedSessionId || undefined,
+            files: uploadedFiles,
+            settings: getSettingsFromUi()
+          })
         });
 
-        const data = await res.json();
-        loadingMsg.classList.remove('loading');
-        const bubble = loadingMsg.querySelector('.bubble');
-        bubble.textContent = data.response || data.error || 'No response received.';
+        tickers.forEach(clearTimeout);
+        loading.classList.remove('loading');
+        loading.querySelector('.bubble').textContent = data.response || data.error || 'No response received.';
+        lastAgentOutput = data;
+        addOutputActions(loading, data);
+        renderProgress(-1, 4);
+        await Promise.all([loadUsage(), loadReviewQueue(), loadOutputs(), loadSessions()]);
       } catch (err) {
-        loadingMsg.classList.remove('loading');
-        const bubble = loadingMsg.querySelector('.bubble');
-        bubble.textContent = 'Error: Could not reach the server.';
+        tickers.forEach(clearTimeout);
+        loading.classList.remove('loading');
+        loading.querySelector('.bubble').textContent = `Error: ${err.message}`;
+        renderProgress(-1, 1);
       }
 
       sendBtn.disabled = false;
@@ -810,9 +741,47 @@
       chat.scrollTop = chat.scrollHeight;
     }
 
+    async function loadSettings() {
+      try { setSettingsUi(await api('/api/settings')); } catch {}
+    }
+
+    async function saveSettings() {
+      await api('/api/settings', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(getSettingsFromUi()) });
+      alert('Settings saved.');
+    }
+
+    async function checkHealth() {
+      try {
+        await api('/api/health');
+        $('healthPill').classList.add('success');
+        $('healthText').textContent = 'Connected';
+      } catch {
+        $('healthPill').classList.remove('success');
+        $('healthText').textContent = 'Offline';
+      }
+    }
+
+    $('uploadBtn').addEventListener('click', () => $('fileInput').click());
+    $('fileInput').addEventListener('change', e => handleFiles([...e.target.files]).catch(err => alert(err.message)));
+    $('clearFilesBtn').addEventListener('click', () => { uploadedFiles = []; renderAttachedFiles(); });
+    $('sendBtn').addEventListener('click', sendMessage);
+    $('clearChatBtn').addEventListener('click', () => { chat.innerHTML = ''; chat.appendChild(welcomeState); });
+    $('newSessionBtn').addEventListener('click', () => setSession(`web-${Date.now()}`));
+    $('refreshSessionsBtn').addEventListener('click', loadSessions);
+    $('refreshUsageBtn').addEventListener('click', loadUsage);
+    $('refreshReviewBtn').addEventListener('click', loadReviewQueue);
+    $('refreshOutputsBtn').addEventListener('click', loadOutputs);
+    $('resetProgressBtn').addEventListener('click', () => renderProgress());
+    $('saveSettingsBtn').addEventListener('click', saveSettings);
+    $('downloadFormat').addEventListener('change', e => e.target.value && lastAgentOutput && saveOutput(e.target.value));
+    $('sessionInput').addEventListener('change', e => setSession(e.target.value.trim()));
+    promptEl.addEventListener('input', resizePrompt);
+    promptEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } });
+
     renderSuggestions();
-    autoResize();
-    checkHealth();
+    renderProgress();
+    resizePrompt();
+    Promise.all([checkHealth(), loadSettings(), loadSessions(), loadUsage(), loadReviewQueue(), loadOutputs()]);
   </script>
 </body>
 </html>
