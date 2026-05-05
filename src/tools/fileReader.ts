@@ -27,23 +27,20 @@ const MAX_FILE_CHARACTERS = 40000;
 const MAX_TOTAL_CHARACTERS = 120000;
 const MAX_FILES_PER_FOLDER = 30;
 
-// Maps file extension to MIME type for vision API calls
 const IMAGE_MEDIA_TYPES: Record<string, ImageMediaType> = {
-  ".png":  "image/png",
-  ".jpg":  "image/jpeg",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
-  ".gif":  "image/gif",
+  ".gif": "image/gif",
   ".webp": "image/webp"
 };
 
-// Returns true if the file is an image type supported by vision APIs
 export function isImageFile(filePath: string): boolean {
   return SUPPORTED_IMAGE_EXTENSIONS.includes(
     path.extname(filePath).toLowerCase()
   );
 }
 
-// Reads an image file and returns it as a base64 attachment for the vision API
 export function readImageFile(filePath: string): ImageAttachment {
   const absolutePath = path.resolve(process.cwd(), filePath);
   const extension = path.extname(absolutePath).toLowerCase();
@@ -66,20 +63,22 @@ export function readImageFile(filePath: string): ImageAttachment {
   return { base64, mediaType };
 }
 
-// ─── Script resolution ────────────────────────────────────────────────────────
-
 function getScriptPath(scriptName: string): string {
   const candidates = [
     path.join(process.cwd(), "scripts", scriptName),
-    path.join(path.dirname(process.argv[1]), "..", "scripts", scriptName)
+    path.join(process.cwd(), "script", scriptName),
+    path.join(path.dirname(process.argv[1]), "..", "scripts", scriptName),
+    path.join(path.dirname(process.argv[1]), "..", "script", scriptName)
   ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
-  }
-  return path.join(process.cwd(), "scripts", scriptName);
-}
 
-// ─── Individual file readers ──────────────────────────────────────────────────
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return path.join(process.cwd(), "script", scriptName);
+}
 
 function readTextFile(absolutePath: string): string {
   return fs.readFileSync(absolutePath, "utf-8");
@@ -87,12 +86,13 @@ function readTextFile(absolutePath: string): string {
 
 function readXlsxFile(absolutePath: string): string {
   const script = getScriptPath("extract_xlsx.py");
+
   if (!fs.existsSync(script)) {
     throw new Error(
-      `Excel extraction script not found at: ${script}. ` +
-      `Make sure scripts/extract_xlsx.py is present in your project root.`
+      `Excel extraction script not found. Looked for script/extract_xlsx.py or scripts/extract_xlsx.py.`
     );
   }
+
   return execSync(`python3 "${script}" "${absolutePath}"`, {
     encoding: "utf-8",
     timeout: 30000
@@ -101,19 +101,18 @@ function readXlsxFile(absolutePath: string): string {
 
 function readPdfFile(absolutePath: string): string {
   const script = getScriptPath("extract_pdf.py");
+
   if (!fs.existsSync(script)) {
     throw new Error(
-      `PDF extraction script not found at: ${script}. ` +
-      `Make sure scripts/extract_pdf.py is present in your project root.`
+      `PDF extraction script not found. Looked for script/extract_pdf.py or scripts/extract_pdf.py.`
     );
   }
+
   return execSync(`python3 "${script}" "${absolutePath}"`, {
     encoding: "utf-8",
     timeout: 30000
   });
 }
-
-// ─── Single file read ─────────────────────────────────────────────────────────
 
 export function readBusinessFile(filePath: string): FileContext {
   const absolutePath = path.resolve(process.cwd(), filePath);
@@ -125,6 +124,7 @@ export function readBusinessFile(filePath: string): FileContext {
   }
 
   const fileStats = fs.statSync(absolutePath);
+
   if (fileStats.isDirectory()) {
     throw new Error(
       `Expected a file but received a folder: ${filePath}. ` +
@@ -155,14 +155,17 @@ export function readBusinessFile(filePath: string): FileContext {
       fileName,
       extension,
       content: rawContent.slice(0, MAX_FILE_CHARACTERS),
-      warning: `File truncated to ${MAX_FILE_CHARACTERS} characters (full size: ${rawContent.length} chars).`
+      warning: `File truncated to ${MAX_FILE_CHARACTERS} characters. Full size: ${rawContent.length} characters.`
     };
   }
 
-  return { filePath: absolutePath, fileName, extension, content: rawContent };
+  return {
+    filePath: absolutePath,
+    fileName,
+    extension,
+    content: rawContent
+  };
 }
-
-// ─── Multi-file read ──────────────────────────────────────────────────────────
 
 export function readMultipleFiles(filePaths: string[]): MultiFileContext {
   const files: FileContext[] = [];
@@ -172,37 +175,46 @@ export function readMultipleFiles(filePaths: string[]): MultiFileContext {
 
   for (const filePath of filePaths) {
     if (totalCharacters >= MAX_TOTAL_CHARACTERS) {
-      skippedFiles.push(`${filePath} (combined character limit reached)`);
+      skippedFiles.push(`${filePath} combined character limit reached`);
       truncated = true;
       continue;
     }
 
     try {
-      const fileCtx = readBusinessFile(filePath);
-      if (totalCharacters + fileCtx.content.length > MAX_TOTAL_CHARACTERS) {
+      const fileContext = readBusinessFile(filePath);
+
+      if (totalCharacters + fileContext.content.length > MAX_TOTAL_CHARACTERS) {
         const remaining = MAX_TOTAL_CHARACTERS - totalCharacters;
+
         files.push({
-          ...fileCtx,
-          content: fileCtx.content.slice(0, remaining),
-          warning: `File truncated — combined file limit reached. Showing first ${remaining} characters.`
+          ...fileContext,
+          content: fileContext.content.slice(0, remaining),
+          warning: `File truncated because combined file limit was reached. Showing first ${remaining} characters.`
         });
+
         totalCharacters = MAX_TOTAL_CHARACTERS;
         truncated = true;
       } else {
-        files.push(fileCtx);
-        totalCharacters += fileCtx.content.length;
+        files.push(fileContext);
+        totalCharacters += fileContext.content.length;
       }
-    } catch (err) {
+    } catch (error) {
       skippedFiles.push(
-        `${path.basename(filePath)} (${err instanceof Error ? err.message : "read error"})`
+        `${path.basename(filePath)} (${
+          error instanceof Error ? error.message : "read error"
+        })`
       );
     }
   }
 
-  return { files, totalFiles: filePaths.length, skippedFiles, totalCharacters, truncated };
+  return {
+    files,
+    totalFiles: filePaths.length,
+    skippedFiles,
+    totalCharacters,
+    truncated
+  };
 }
-
-// ─── Folder read ──────────────────────────────────────────────────────────────
 
 export interface FolderReadOptions {
   recursive?: boolean;
@@ -210,7 +222,10 @@ export interface FolderReadOptions {
   pattern?: string;
 }
 
-export function readFolder(folderPath: string, options: FolderReadOptions = {}): MultiFileContext {
+export function readFolder(
+  folderPath: string,
+  options: FolderReadOptions = {}
+): MultiFileContext {
   const absoluteFolder = path.resolve(process.cwd(), folderPath);
 
   if (!fs.existsSync(absoluteFolder)) {
@@ -218,15 +233,19 @@ export function readFolder(folderPath: string, options: FolderReadOptions = {}):
   }
 
   const stats = fs.statSync(absoluteFolder);
+
   if (!stats.isDirectory()) {
-    throw new Error(`Expected a folder but received a file: ${folderPath}. Use --file instead.`);
+    throw new Error(
+      `Expected a folder but received a file: ${folderPath}. Use --file instead.`
+    );
   }
 
   const extensions = options.extensions ?? SUPPORTED_EXTENSIONS;
   const pattern = options.pattern?.toLowerCase();
 
-  function collectFiles(dir: string, depth: number = 0): string[] {
+  function collectFiles(dir: string, depth = 0): string[] {
     if (depth > 3) return [];
+
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     const collected: string[] = [];
 
@@ -237,8 +256,12 @@ export function readFolder(folderPath: string, options: FolderReadOptions = {}):
         entry.name === "dist" ||
         entry.name === "logs" ||
         entry.name === "usage" ||
-        entry.name === "review_queue"
-      ) continue;
+        entry.name === "review_queue" ||
+        entry.name === "web_uploads" ||
+        entry.name === "web_outputs"
+      ) {
+        continue;
+      }
 
       const fullPath = path.join(dir, entry.name);
 
@@ -246,7 +269,9 @@ export function readFolder(folderPath: string, options: FolderReadOptions = {}):
         collected.push(...collectFiles(fullPath, depth + 1));
       } else if (entry.isFile()) {
         const ext = path.extname(entry.name).toLowerCase();
-        const nameMatch = !pattern || entry.name.toLowerCase().includes(pattern);
+        const nameMatch =
+          !pattern || entry.name.toLowerCase().includes(pattern);
+
         if (extensions.includes(ext) && nameMatch) {
           collected.push(fullPath);
         }
@@ -267,7 +292,7 @@ export function readFolder(folderPath: string, options: FolderReadOptions = {}):
 
   if (allFiles.length > MAX_FILES_PER_FOLDER) {
     throw new Error(
-      `Folder contains ${allFiles.length} supported files — maximum is ${MAX_FILES_PER_FOLDER}. ` +
+      `Folder contains ${allFiles.length} supported files. Maximum is ${MAX_FILES_PER_FOLDER}. ` +
       `Use --pattern to filter by filename, or specify individual files with --file.`
     );
   }
@@ -275,20 +300,20 @@ export function readFolder(folderPath: string, options: FolderReadOptions = {}):
   return readMultipleFiles(allFiles);
 }
 
-// ─── Prompt builders ──────────────────────────────────────────────────────────
-
 const TYPE_LABELS: Record<string, string> = {
   ".xlsx": "Excel spreadsheet",
-  ".pdf":  "PDF document",
-  ".csv":  "CSV data file",
+  ".pdf": "PDF document",
+  ".csv": "CSV data file",
   ".json": "JSON file",
-  ".md":   "Markdown document",
-  ".txt":  "Text file"
+  ".md": "Markdown document",
+  ".txt": "Text file"
 };
 
 export function buildFilePrompt(fileContext: FileContext): string {
   const label = TYPE_LABELS[fileContext.extension] ?? fileContext.extension;
-  const warningText = fileContext.warning ? `\nWarning: ${fileContext.warning}\n` : "";
+  const warningText = fileContext.warning
+    ? `\nWarning: ${fileContext.warning}\n`
+    : "";
 
   return `
 The user attached a ${label}.
@@ -305,32 +330,57 @@ ${fileContext.content}
 `;
 }
 
-export function buildMultiFilePrompt(ctx: MultiFileContext, source: string): string {
+export function buildMultiFilePrompt(
+  ctx: MultiFileContext,
+  source: string
+): string {
   const lines: string[] = [];
 
   lines.push(`The user attached ${ctx.files.length} file(s) from ${source}.`);
-  lines.push(`Total content: ~${Math.round(ctx.totalCharacters / 1000)}k characters across ${ctx.files.length} file(s).`);
+  lines.push(
+    `Total content: ~${Math.round(
+      ctx.totalCharacters / 1000
+    )}k characters across ${ctx.files.length} file(s).`
+  );
 
   if (ctx.truncated) {
-    lines.push(`Note: Combined content was truncated at ${MAX_TOTAL_CHARACTERS} characters to stay within context limits.`);
+    lines.push(
+      `Note: Combined content was truncated at ${MAX_TOTAL_CHARACTERS} characters to stay within context limits.`
+    );
   }
 
   if (ctx.skippedFiles.length > 0) {
-    lines.push(`\nSkipped files (could not be read):\n${ctx.skippedFiles.map(f => `  - ${f}`).join("\n")}`);
+    lines.push(
+      `\nSkipped files that could not be read:\n${ctx.skippedFiles
+        .map(file => `  - ${file}`)
+        .join("\n")}`
+    );
   }
 
-  lines.push(`\nFiles included:`);
-  ctx.files.forEach((f, i) => {
-    lines.push(`  ${i + 1}. ${f.fileName} (${TYPE_LABELS[f.extension] ?? f.extension})`);
+  lines.push("\nFiles included:");
+
+  ctx.files.forEach((file, index) => {
+    lines.push(
+      `  ${index + 1}. ${file.fileName} (${
+        TYPE_LABELS[file.extension] ?? file.extension
+      })`
+    );
   });
 
   lines.push(`\n${"=".repeat(60)}`);
 
-  ctx.files.forEach((f, i) => {
-    const label = TYPE_LABELS[f.extension] ?? f.extension;
-    lines.push(`\n--- File ${i + 1} of ${ctx.files.length}: ${f.fileName} (${label}) ---`);
-    if (f.warning) lines.push(`Warning: ${f.warning}`);
-    lines.push(`\n\`\`\`\n${f.content}\n\`\`\``);
+  ctx.files.forEach((file, index) => {
+    const label = TYPE_LABELS[file.extension] ?? file.extension;
+
+    lines.push(
+      `\n--- File ${index + 1} of ${ctx.files.length}: ${file.fileName} (${label}) ---`
+    );
+
+    if (file.warning) {
+      lines.push(`Warning: ${file.warning}`);
+    }
+
+    lines.push(`\n\`\`\`\n${file.content}\n\`\`\``);
   });
 
   return lines.join("\n");
