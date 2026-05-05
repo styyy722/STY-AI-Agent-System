@@ -258,6 +258,10 @@
     .progress-step.active { color:var(--text); }
     .progress-step.active .step-dot { background:var(--primary); box-shadow:0 0 0 4px rgba(91,140,255,0.12); }
     .progress-step.done .step-dot { background:var(--good); }
+    .plan-list { display:grid; gap:8px; max-height:220px; overflow:auto; padding-right:3px; }
+    .plan-item { border:1px solid var(--border); background:rgba(255,255,255,0.035); border-radius:14px; padding:11px; }
+    .plan-item strong { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:0.82rem; margin-bottom:5px; }
+    .plan-item span { color:var(--muted); font-size:0.74rem; line-height:1.4; display:block; }
 
     .review-item, .output-item {
       border:1px solid var(--border); background:rgba(255,255,255,0.035); border-radius:14px; padding:11px;
@@ -390,6 +394,11 @@
       </div>
 
       <div class="card">
+        <div class="card-header"><h3>Workflow plan</h3><button class="btn small" id="clearPlanBtn">Clear</button></div>
+        <div class="plan-list" id="workflowPlanList"></div>
+      </div>
+
+      <div class="card">
         <div class="card-header"><h3>Cost usage</h3><button class="btn small" id="refreshUsageBtn">Refresh</button></div>
         <div class="usage-grid">
           <div class="metric"><strong id="costToday">$0.0000</strong><span>Today</span></div>
@@ -425,7 +434,7 @@
           <div class="field"><label for="audienceInput">Audience</label><input class="input" id="audienceInput" value="Business user" /></div>
           <div class="field"><label for="formatInput">Output format</label><input class="input" id="formatInput" value="Structured response" /></div>
           <div class="field"><label for="detailSelect">Detail level</label><select id="detailSelect"><option value="concise">Concise</option><option selected value="balanced">Balanced</option><option value="detailed">Detailed</option></select></div>
-          <div class="field"><label for="workflowSelect">Workflow</label><select id="workflowSelect"><option value="auto">Auto</option><option selected value="standard">Standard</option><option value="routing">Routing</option><option value="evaluator-optimizer">Evaluator optimizer</option><option value="human-approval">Human approval</option><option value="long-running">Long-running loop</option></select></div>
+          <div class="field"><label for="workflowSelect">Workflow</label><select id="workflowSelect"><option selected value="auto">Auto</option><option value="standard">Standard</option><option value="routing">Routing</option><option value="evaluator-optimizer">Evaluator optimizer</option><option value="human-approval">Human approval</option><option value="long-running">Long-running loop</option></select></div>
           <label class="check-row"><input id="assumptionsCheck" type="checkbox" checked /> Include assumptions</label>
           <label class="check-row"><input id="nextStepsCheck" type="checkbox" checked /> Include next steps</label>
           <label class="check-row"><input id="dryRunToolsCheck" type="checkbox" /> Dry-run tools</label>
@@ -493,7 +502,7 @@
       $('assumptionsCheck').checked = settings.includeAssumptions !== false;
       $('nextStepsCheck').checked = settings.includeNextSteps !== false;
       $('deepCheck').checked = !!settings.deepAnalysis;
-      $('workflowSelect').value = settings.workflowType || 'standard';
+      $('workflowSelect').value = settings.workflowType || 'auto';
       $('dryRunToolsCheck').checked = !!settings.dryRunTools;
     }
 
@@ -516,6 +525,22 @@
         div.className = 'progress-step' + (index === activeIndex ? ' active' : '') + (index <= doneThrough ? ' done' : '');
         div.innerHTML = `<span class="step-dot"></span><span>${step}</span>`;
         $('progressList').appendChild(div);
+      });
+    }
+
+    function renderWorkflowPlan(plan = []) {
+      const list = $('workflowPlanList');
+      list.innerHTML = '';
+      if (!plan.length) {
+        list.innerHTML = '<span class="helper">Auto workflow plans will appear here after a run.</span>';
+        return;
+      }
+      plan.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'plan-item';
+        const reasons = (item.reasons || []).slice(0, 2).join(' ');
+        div.innerHTML = `<strong><span>${item.mode}</span><span class="tag">score ${item.score}</span></strong><span>${reasons || 'Selected by workflow planner.'}</span>`;
+        list.appendChild(div);
       });
     }
 
@@ -776,6 +801,7 @@
         if (data.workflowType && data.workflowSteps?.length) {
           loading.querySelector('.bubble').textContent += `\n\nWorkflow: ${data.workflowType}\n` + data.workflowSteps.map((step, index) => `${index + 1}. ${step}`).join('\n');
         }
+        renderWorkflowPlan(data.workflowPlan || []);
         lastAgentOutput = data;
         const elapsedSeconds = ((data.elapsedMs ?? (performance.now() - requestStartTime)) / 1000).toFixed(1);
         const estimatedCost = Number(data.estimatedCostUSD ?? 0);
@@ -830,6 +856,7 @@
     $('refreshReviewBtn').addEventListener('click', loadReviewQueue);
     $('refreshOutputsBtn').addEventListener('click', loadOutputs);
     $('resetProgressBtn').addEventListener('click', () => renderProgress());
+    $('clearPlanBtn').addEventListener('click', () => renderWorkflowPlan());
     $('saveSettingsBtn').addEventListener('click', saveSettings);
     $('downloadFormat').addEventListener('change', e => e.target.value && lastAgentOutput && saveOutput(e.target.value));
     $('sessionInput').addEventListener('change', e => setSession(e.target.value.trim()));
@@ -838,6 +865,7 @@
 
     renderSuggestions();
     renderProgress();
+    renderWorkflowPlan();
     resizePrompt();
     Promise.all([checkHealth(), loadSettings(), loadSessions(), loadUsage(), loadReviewQueue(), loadOutputs()]);
   </script>

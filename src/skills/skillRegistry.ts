@@ -366,8 +366,29 @@ const EXTRA_KEYWORDS_BY_FOLDER: Record<string, string[]> = {
     "interface",
     "error screenshot"
   ],
+  cfo_dashboard_trust_review: [
+    "cfo dashboard",
+    "dashboard trust",
+    "trust this dashboard",
+    "executive dashboard",
+    "power bi trust",
+    "dashboard review",
+    "finance dashboard",
+    "can the cfo trust"
+  ],
 
   // --- Finance skills ---
+  board_finance_quality_review: [
+    "board finance",
+    "board finance assumptions",
+    "board readiness",
+    "board-ready finance",
+    "cfo trust",
+    "finance quality review",
+    "calculation integrity",
+    "executive finance review",
+    "finance assumptions"
+  ],
   "financial-analyst": [
     "wacc",
     "dcf",
@@ -1092,7 +1113,10 @@ export function getAvailableSkills(): AgentSkill[] {
   return skills;
 }
 
-export function findRelevantSkills(userInput: string): AgentSkill[] {
+export function findRelevantSkills(
+  userInput: string,
+  preferredCategory?: SkillCategory
+): AgentSkill[] {
   const normalizedInput = userInput.toLowerCase();
   const availableSkills = getAvailableSkills();
 
@@ -1121,7 +1145,11 @@ export function findRelevantSkills(userInput: string): AgentSkill[] {
 
       return {
         skill,
-        score: matchedKeywords.length + folderMatch + nameMatch
+        score:
+          matchedKeywords.length +
+          folderMatch +
+          nameMatch +
+          (preferredCategory && skill.category === preferredCategory ? 3 : 0)
       };
     })
     .filter((result) => result.score > 0)
@@ -1151,8 +1179,11 @@ export function loadSkillContent(skill: AgentSkill): string {
   return fs.readFileSync(skillPath, "utf-8");
 }
 
-export function buildSkillContext(userInput: string): string {
-  const relevantSkills = findRelevantSkills(userInput);
+export function buildSkillContext(
+  userInput: string,
+  preferredCategory?: SkillCategory
+): string {
+  const relevantSkills = findRelevantSkills(userInput, preferredCategory);
 
   if (relevantSkills.length === 0) {
     return "";

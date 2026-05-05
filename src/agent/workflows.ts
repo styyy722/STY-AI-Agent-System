@@ -4,7 +4,11 @@ import {
   type AgentRequest,
   type AgentResponse
 } from "./coreAgent.js";
-import { findRelevantSkills } from "../skills/skillRegistry.js";
+import {
+  findRelevantSkills,
+  getAvailableSkills,
+  keywordMatches
+} from "../skills/skillRegistry.js";
 import { addToReviewQueue } from "../tools/reviewQueue.js";
 import type { ConfidenceResult } from "../tools/confidenceScorer.js";
 
@@ -24,6 +28,12 @@ export interface WorkflowRequest extends AgentRequest {
 
 const ROUTABLE_MODES: AgentMode[] = ["finance", "data", "report", "pbi"];
 const AUTO_MODES: AgentMode[] = ["finance", "data", "pbi", "report"];
+
+interface AutoModePlan {
+  mode: AgentMode;
+  score: number;
+  reasons: string[];
+}
 
 const AUTO_MODE_KEYWORDS: Record<AgentMode, string[]> = {
   general: [],
@@ -103,47 +113,112 @@ function routeModeFromInput(input: string, fallback: AgentMode): AgentMode {
   return (matchedMode as AgentMode | undefined) ?? fallback;
 }
 
-function inferAutoModes(input: string, fallback: AgentMode): AgentMode[] {
-  const normalizedInput = input.toLowerCase();
-  const scores = new Map<AgentMode, number>();
+function addReason(
+  plan: Map<AgentMode, AutoModePlan>,
+  mode: AgentMode,
+  score: number,
+  reason: string
+): void {
+  const current = plan.get(mode) ?? { mode, score: 0, reasons: [] };
+  current.score += score;
 
-  for (const mode of AUTO_MODES) {
-    scores.set(mode, mode === fallback ? 1 : 0);
+  if (!current.reasons.includes(reason)) {
+    current.reasons.push(reason);
   }
 
-  for (const skill of findRelevantSkills(input)) {
+  plan.set(mode, current);
+}
+
+export function inferAutoModePlan(input: string, fallback: AgentMode): AutoModePlan[] {
+  const normalizedInput = input.toLowerCase();
+  const plan = new Map<AgentMode, AutoModePlan>();
+
+  for (const mode of AUTO_MODES) {
+    plan.set(mode, { mode, score: 0, reasons: [] });
+  }
+
+  if (AUTO_MODES.includes(fallback)) {
+    addReason(plan, fallback, 1, `User selected ${fallback} mode as the starting context.`);
+  }
+
+  for (const skill of getAvailableSkills()) {
     if (AUTO_MODES.includes(skill.category as AgentMode)) {
       const mode = skill.category as AgentMode;
-      scores.set(mode, (scores.get(mode) ?? 0) + 3);
+      const matchedKeywords = skill.keywords.filter(keyword =>
+        keywordMatches(normalizedInput, keyword)
+      );
+
+      if (matchedKeywords.length > 0) {
+        addReason(
+          plan,
+          mode,
+          Math.min(5, matchedKeywords.length) + 2,
+          `Matched ${skill.name} skill (${matchedKeywords.slice(0, 3).join(", ")}).`
+        );
+      }
     }
   }
 
   for (const mode of AUTO_MODES) {
     const keywordHits = AUTO_MODE_KEYWORDS[mode].filter(keyword =>
-      normalizedInput.includes(keyword)
-    ).length;
-    scores.set(mode, (scores.get(mode) ?? 0) + keywordHits);
+      keywordMatches(normalizedInput, keyword)
+    );
+
+    if (keywordHits.length > 0) {
+      addReason(
+        plan,
+        mode,
+        keywordHits.length,
+        `Task wording suggests ${mode}: ${keywordHits.slice(0, 4).join(", ")}.`
+      );
+    }
   }
 
-  const selected: AgentMode[] = AUTO_MODES
-    .filter(mode => (scores.get(mode) ?? 0) > 0)
-    .sort((a, b) => (scores.get(b) ?? 0) - (scores.get(a) ?? 0));
+  if (/\.(xlsx|csv|json)\b/i.test(input)) {
+    addReason(plan, "data", 2, "Attached structured data file suggests data validation or analysis.");
+  }
+
+  if (/\.(png|jpe?g|webp|gif)\b/i.test(input)) {
+    addReason(plan, "pbi", 2, "Attached image/screenshot may require dashboard or visual review.");
+    addReason(plan, "data", 1, "Attached image/screenshot may contain charts or metrics to validate.");
+  }
+
+  if (/dashboard|power bi|dax|semantic model|measure/i.test(input)) {
+    addReason(plan, "pbi", 3, "Dashboard or Power BI terminology detected.");
+  }
+
+  let selected = Array.from(plan.values())
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 4);
 
   if (selected.length === 0) {
-    selected.push(fallback === "general" ? "report" : fallback);
+    const mode = fallback === "general" ? "report" : fallback;
+    selected = [{
+      mode,
+      score: 1,
+      reasons: ["No strong specialist match found; using fallback mode."]
+    }];
   }
 
-  if (selected.length > 1 && selected.includes("report")) {
-    return [...selected.filter(mode => mode !== "report"), "report"];
+  if (selected.length > 1) {
+    const reportPlan = selected.find(item => item.mode === "report");
+
+    if (reportPlan) {
+      selected = selected
+        .filter(item => item.mode !== "report")
+        .concat(reportPlan);
+    }
   }
 
-  return selected.slice(0, 4);
+  return selected;
 }
 
 function buildSpecialistPrompt(
   originalRequest: string,
   mode: AgentMode,
-  selectedModes: AgentMode[]
+  selectedModes: AgentMode[],
+  plan: AutoModePlan[]
 ): string {
   return `
 AUTO MULTI-MODE WORKFLOW
@@ -153,6 +228,9 @@ ${originalRequest}
 
 Selected specialist modes for this execution:
 ${selectedModes.map(selectedMode => `- ${selectedMode}`).join("\n")}
+
+Selection rationale:
+${plan.map(item => `- ${item.mode}: score ${item.score}; ${item.reasons.join(" ")}`).join("\n")}
 
 Your assigned specialist lens: ${mode}
 
@@ -207,12 +285,14 @@ function defaultConfidence(): ConfidenceResult {
 function withWorkflow(
   response: AgentResponse,
   workflowType: WorkflowType,
-  steps: string[]
+  steps: string[],
+  workflowPlan?: AutoModePlan[]
 ): AgentResponse {
   return {
     ...response,
     workflowType,
-    workflowSteps: steps
+    workflowSteps: steps,
+    workflowPlan
   };
 }
 
@@ -231,18 +311,26 @@ async function runRoutingWorkflow(request: WorkflowRequest): Promise<AgentRespon
 }
 
 async function runAutoWorkflow(request: WorkflowRequest): Promise<AgentResponse> {
-  const selectedModes = inferAutoModes(request.userInput, request.mode);
+  const workflowPlan = inferAutoModePlan(request.userInput, request.mode);
+  const selectedModes = workflowPlan.map(item => item.mode);
   const specialistResults: AgentResponse[] = [];
   const steps: string[] = [
-    `Detected specialist modes: ${selectedModes.join(", ")}.`
+    `Detected specialist modes: ${selectedModes.join(", ")}.`,
+    ...workflowPlan.map(
+      item => `${item.mode} score ${item.score}: ${item.reasons.join(" ")}`
+    )
   ];
 
   for (const mode of selectedModes) {
     const result = await runCoreAgent({
       ...request,
       mode,
-      userInput: buildSpecialistPrompt(request.userInput, mode, selectedModes),
-      dryRunTools: request.dryRunTools ?? specialistResults.length > 0
+      userInput: buildSpecialistPrompt(request.userInput, mode, selectedModes, workflowPlan),
+      dryRunTools: request.dryRunTools ?? specialistResults.length > 0,
+      skipSessionSave: true,
+      skipReviewQueue: true,
+      skipRagIndex: true,
+      skipMemoryStore: true
     });
 
     specialistResults.push(result);
@@ -258,13 +346,14 @@ async function runAutoWorkflow(request: WorkflowRequest): Promise<AgentResponse>
   const finalResponse = await runCoreAgent({
     ...request,
     mode: synthesisMode,
-    userInput: buildSynthesisPrompt(request.userInput, specialistResults)
+    userInput: buildSynthesisPrompt(request.userInput, specialistResults),
+    sessionUserInput: request.userInput
   });
 
   return withWorkflow(finalResponse, "auto", [
     ...steps,
     `Synthesised final answer in ${synthesisMode} mode.`
-  ]);
+  ], workflowPlan);
 }
 
 async function runEvaluatorOptimizerWorkflow(

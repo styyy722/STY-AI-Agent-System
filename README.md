@@ -12,7 +12,7 @@ STY AI Agent System helps with:
 
 - **Finance workflows**: WACC, CAPM, valuation, rolling forecasts, driver-based planning, variance bridges, working capital, cash flow, unit economics, pricing/margin analysis, covenant checks, stock analysis, and capital allocation.
 - **Data analytics workflows**: dataset overview, EDA, data observability, data contracts, anomaly detection, forecasting, experiments, causal inference, segmentation, churn, SQL review, schema mapping, metrics, and root-cause investigation.
-- **Power BI workflows**: DAX optimisation, finance measure libraries, financial reporting models, semantic model review, calculation groups, incremental refresh, RLS/OLS, Power Query finance ETL, governance, ALM/deployment, audit monitoring, and report design.
+- **Power BI workflows**: DAX optimisation, finance measure libraries, financial reporting models, CFO dashboard trust review, semantic model review, calculation groups, incremental refresh, RLS/OLS, Power Query finance ETL, governance, ALM/deployment, audit monitoring, and report design.
 - **Reporting workflows**: executive summaries, board papers, business cases, financial performance reports, project status reports, risk reports, and slide-ready insights.
 - **Productivity workflows**: general business writing, structured analysis, action plans, reusable session context, and local output saving.
 
@@ -495,10 +495,10 @@ general_skills/
 
 | Category | Folder | Examples |
 |---|---|---|
-| Finance | `finance_skills/` | financial analyst, WACC, DCF, investment advisor, stock analysis |
-| Data | `data_skills/` | EDA, cohort analysis, data quality, observability, data contracts, anomaly detection, forecasting, SQL review, metrics, schema mapping, visualisation |
-| Report | `report_skills/` | business case, data insights report, executive reporting, financial performance, project status, risk report |
-| Power BI | `PBI_skills/` | DAX optimisation, finance measure libraries, financial reporting, semantic modelling, governance, ALM, RLS/OLS, visualisation designer |
+| Finance | `finance_skills/` | financial analyst, WACC, DCF, board finance quality review, investment advisor, stock analysis |
+| Data | `data_skills/` | EDA, cohort analysis, data quality, metric governance, observability, data contracts, anomaly detection, forecasting, SQL review |
+| Report | `report_skills/` | corporate decision memo, business case, data insights report, executive reporting, financial performance, project status, risk report |
+| Power BI | `PBI_skills/` | CFO dashboard trust review, DAX optimisation, finance measure libraries, financial reporting, semantic modelling, governance, ALM, RLS/OLS |
 | General | `general_skills/` | screenshot and photo analysis |
 
 ### Listing installed skills

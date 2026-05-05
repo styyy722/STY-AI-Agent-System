@@ -139,7 +139,7 @@ export async function runMultiAgent(
   }
 
   const roles = request.roles ?? ["planner", "analyst", "critic", "synthesiser"];
-  const skillContext = buildSkillContext(request.userInput);
+  const skillContext = buildSkillContext(request.userInput, request.mode);
   const steps: SubAgentResult[] = [];
   let priorContext = "";
 

@@ -26,6 +26,11 @@ export interface AgentRequest {
   images?: ImageAttachment[];
   dryRunTools?: boolean;
   permittedToolPermissions?: ToolPermission[];
+  sessionUserInput?: string;
+  skipSessionSave?: boolean;
+  skipReviewQueue?: boolean;
+  skipRagIndex?: boolean;
+  skipMemoryStore?: boolean;
 }
 
 export interface AgentResponse {
@@ -43,6 +48,11 @@ export interface AgentResponse {
   memoriesUsed?: number;
   workflowType?: string;
   workflowSteps?: string[];
+  workflowPlan?: Array<{
+    mode: AgentMode;
+    score: number;
+    reasons: string[];
+  }>;
 }
 
 export function buildSystemPrompt(mode: AgentMode, toolsContext?: string): string {
@@ -213,7 +223,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     throw new BudgetExceededError(preflight.spentUSD, preflight.budgetUSD);
   }
 
-  const skillContext = buildSkillContext(request.userInput);
+  const skillContext = buildSkillContext(request.userInput, request.mode);
   const matchedSkills = findRelevantSkills(request.userInput).map(s => s.name);
 
   // ── Long-term memory: retrieve relevant past context ─────────────────────
@@ -328,11 +338,11 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       }
     }
 
-    if (request.sessionId) {
+    if (request.sessionId && !request.skipSessionSave) {
       appendToSession(
         request.sessionId,
         request.mode,
-        request.userInput,
+        request.sessionUserInput ?? request.userInput,
         finalText
       );
     }
@@ -369,7 +379,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     let reviewQueued = false;
     let reviewId: string | undefined;
 
-    if (requiresReview(request.mode, confidence)) {
+    if (!request.skipReviewQueue && requiresReview(request.mode, confidence)) {
       const queueItem = addToReviewQueue({
         mode: request.mode,
         sessionId: request.sessionId,
@@ -381,7 +391,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
       reviewId = queueItem.id;
     }
 
-    if (process.env.RAG_ENABLED !== "false") {
+    if (!request.skipRagIndex && process.env.RAG_ENABLED !== "false") {
       autoIndexOutput({
         mode: request.mode,
         userInput: request.userInput,
@@ -391,7 +401,7 @@ export async function runCoreAgent(request: AgentRequest): Promise<AgentResponse
     }
 
     // ── Auto-store activity in long-term memory ───────────────────────────
-    if (process.env.MEMORY_ENABLED !== "false") {
+    if (!request.skipMemoryStore && process.env.MEMORY_ENABLED !== "false") {
       autoStoreActivity(request.mode, request.userInput, finalText);
     }
 

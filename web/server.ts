@@ -80,7 +80,7 @@ const defaultSettings: WebSettings = {
   includeAssumptions: true,
   includeNextSteps: true,
   deepAnalysis: false,
-  workflowType: "standard",
+  workflowType: "auto",
   dryRunTools: false
 };
 
@@ -416,6 +416,7 @@ app.post("/api/ask", async (req, res) => {
       memoriesUsed: result.memoriesUsed,
       workflowType: result.workflowType,
       workflowSteps: result.workflowSteps,
+      workflowPlan: result.workflowPlan,
       elapsedMs: Date.now() - requestStartedAt,
       estimatedCostUSD
     });
