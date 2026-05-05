@@ -283,6 +283,8 @@ app.post("/api/upload", (req, res) => {
 app.post("/api/ask", async (req, res) => {
   try {
     const { mode, prompt, sessionId, files, settings } = req.body;
+    const requestStartedAt = Date.now();
+    const usageBefore = getDailySummary();
 
     if (!prompt) {
       return res.status(400).json({
@@ -322,11 +324,19 @@ app.post("/api/ask", async (req, res) => {
         appendToSession(sessionId, resolvedMode, prompt, result.finalOutput);
       }
 
+      const usageAfter = getDailySummary();
+      const estimatedCostUSD = Math.max(
+        0,
+        Number(usageAfter.totalCostUSD ?? 0) - Number(usageBefore.totalCostUSD ?? 0)
+      );
+      
       return res.json({
         response: result.finalOutput,
         title: `STY Agent — Deep Analysis (${resolvedMode})`,
         sessionId,
         deepAnalysis: true,
+        elapsedMs: Date.now() - requestStartedAt,
+        estimatedCostUSD,
         steps: result.steps.map(step => ({
           role: step.role,
           durationMs: step.durationMs
@@ -340,6 +350,12 @@ app.post("/api/ask", async (req, res) => {
       sessionId
     });
 
+    const usageAfter = getDailySummary();
+    const estimatedCostUSD = Math.max(
+      0,
+      Number(usageAfter.totalCostUSD ?? 0) - Number(usageBefore.totalCostUSD ?? 0)
+    );
+    
     res.json({
       response: result.summary,
       title: result.title,
@@ -351,7 +367,9 @@ app.post("/api/ask", async (req, res) => {
       reviewId: result.reviewId,
       toolsUsed: result.toolsUsed,
       codeExecuted: result.codeExecuted,
-      memoriesUsed: result.memoriesUsed
+      memoriesUsed: result.memoriesUsed,
+      elapsedMs: Date.now() - requestStartedAt,
+      estimatedCostUSD
     });
   } catch (error: any) {
     console.error("Agent error:", error);
