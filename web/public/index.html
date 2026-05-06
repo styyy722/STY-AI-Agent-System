@@ -258,6 +258,10 @@
     .progress-step.active { color:var(--text); }
     .progress-step.active .step-dot { background:var(--primary); box-shadow:0 0 0 4px rgba(91,140,255,0.12); }
     .progress-step.done .step-dot { background:var(--good); }
+    .plan-list { display:grid; gap:8px; max-height:220px; overflow:auto; padding-right:3px; }
+    .plan-item { border:1px solid var(--border); background:rgba(255,255,255,0.035); border-radius:14px; padding:11px; }
+    .plan-item strong { display:flex; align-items:center; justify-content:space-between; gap:8px; font-size:0.82rem; margin-bottom:5px; }
+    .plan-item span { color:var(--muted); font-size:0.74rem; line-height:1.4; display:block; }
 
     .review-item, .output-item {
       border:1px solid var(--border); background:rgba(255,255,255,0.035); border-radius:14px; padding:11px;
@@ -364,7 +368,7 @@
         <div class="composer">
           <div class="upload-strip">
             <div class="row">
-              <input class="visually-hidden" id="fileInput" type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.xlsx" />
+              <input class="visually-hidden" id="fileInput" type="file" multiple accept=".txt,.md,.csv,.json,.pdf,.xlsx,.png,.jpg,.jpeg,.gif,.webp,image/png,image/jpeg,image/gif,image/webp" />
               <button class="btn" id="uploadBtn" type="button">Upload files</button>
               <button class="btn" id="clearFilesBtn" type="button">Clear files</button>
             </div>
@@ -373,9 +377,10 @@
           <label class="visually-hidden" for="prompt">Message</label>
           <textarea id="prompt" placeholder="Describe your task, context, and preferred output... (Shift+Enter for a new line)"></textarea>
           <div class="composer-footer">
-            <span class="helper">Tip: pick a mode, select a session, upload files if needed, then ask for the exact output format.</span>
+            <span class="helper">Tip: pick a mode, select a session, upload files or images if needed, then ask for the exact output format.</span>
             <div class="row">
               <button class="btn" id="clearChatBtn" type="button">Clear chat</button>
+              <button class="btn" id="planBtn" type="button">Plan workflow</button>
               <button class="btn primary" id="sendBtn" type="button">Send message</button>
             </div>
           </div>
@@ -387,6 +392,11 @@
       <div class="card">
         <div class="card-header"><h3>Progress steps</h3><button class="btn small" id="resetProgressBtn">Reset</button></div>
         <div class="progress-list" id="progressList"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h3>Workflow plan</h3><button class="btn small" id="clearPlanBtn">Clear</button></div>
+        <div class="plan-list" id="workflowPlanList"></div>
       </div>
 
       <div class="card">
@@ -425,8 +435,10 @@
           <div class="field"><label for="audienceInput">Audience</label><input class="input" id="audienceInput" value="Business user" /></div>
           <div class="field"><label for="formatInput">Output format</label><input class="input" id="formatInput" value="Structured response" /></div>
           <div class="field"><label for="detailSelect">Detail level</label><select id="detailSelect"><option value="concise">Concise</option><option selected value="balanced">Balanced</option><option value="detailed">Detailed</option></select></div>
+          <div class="field"><label for="workflowSelect">Workflow</label><select id="workflowSelect"><option selected value="auto">Auto</option><option value="standard">Standard</option><option value="routing">Routing</option><option value="evaluator-optimizer">Evaluator optimizer</option><option value="human-approval">Human approval</option><option value="long-running">Long-running loop</option></select></div>
           <label class="check-row"><input id="assumptionsCheck" type="checkbox" checked /> Include assumptions</label>
           <label class="check-row"><input id="nextStepsCheck" type="checkbox" checked /> Include next steps</label>
+          <label class="check-row"><input id="dryRunToolsCheck" type="checkbox" /> Dry-run tools</label>
           <label class="check-row"><input id="deepCheck" type="checkbox" /> Deep multi-agent analysis</label>
           <button class="btn" id="saveSettingsBtn" type="button">Save settings</button>
         </div>
@@ -478,7 +490,9 @@
         detailLevel: $('detailSelect').value,
         includeAssumptions: $('assumptionsCheck').checked,
         includeNextSteps: $('nextStepsCheck').checked,
-        deepAnalysis: $('deepCheck').checked
+        deepAnalysis: $('deepCheck').checked,
+        workflowType: $('workflowSelect').value,
+        dryRunTools: $('dryRunToolsCheck').checked
       };
     }
 
@@ -489,6 +503,8 @@
       $('assumptionsCheck').checked = settings.includeAssumptions !== false;
       $('nextStepsCheck').checked = settings.includeNextSteps !== false;
       $('deepCheck').checked = !!settings.deepAnalysis;
+      $('workflowSelect').value = settings.workflowType || 'auto';
+      $('dryRunToolsCheck').checked = !!settings.dryRunTools;
     }
 
     function renderSuggestions() {
@@ -510,6 +526,22 @@
         div.className = 'progress-step' + (index === activeIndex ? ' active' : '') + (index <= doneThrough ? ' done' : '');
         div.innerHTML = `<span class="step-dot"></span><span>${step}</span>`;
         $('progressList').appendChild(div);
+      });
+    }
+
+    function renderWorkflowPlan(plan = []) {
+      const list = $('workflowPlanList');
+      list.innerHTML = '';
+      if (!plan.length) {
+        list.innerHTML = '<span class="helper">Auto workflow plans will appear here after a run.</span>';
+        return;
+      }
+      plan.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'plan-item';
+        const reasons = (item.reasons || []).slice(0, 2).join(' ');
+        div.innerHTML = `<strong><span>${item.mode}</span><span class="tag">score ${item.score}</span></strong><span>${reasons || 'Selected by workflow planner.'}</span>`;
+        list.appendChild(div);
       });
     }
 
@@ -678,6 +710,37 @@
       window.location.href = data.downloadUrl;
     }
 
+    async function planWorkflow() {
+      const prompt = promptEl.value.trim();
+      if (!prompt) return alert('Enter a prompt first so the agent can plan the workflow.');
+
+      const planBtn = $('planBtn');
+      planBtn.disabled = true;
+      planBtn.textContent = 'Planning...';
+      renderProgress(0, -1);
+
+      try {
+        const data = await api('/api/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: currentMode,
+            prompt,
+            files: uploadedFiles,
+            settings: getSettingsFromUi()
+          })
+        });
+        renderWorkflowPlan(data.plan || []);
+        renderProgress(-1, 0);
+      } catch (err) {
+        alert(err.message);
+        renderProgress();
+      }
+
+      planBtn.disabled = false;
+      planBtn.textContent = 'Plan workflow';
+    }
+
     function renderAttachedFiles() {
       const box = $('attachedFiles');
       box.innerHTML = '';
@@ -767,6 +830,10 @@
         tickers.forEach(clearTimeout);
         loading.classList.remove('loading');
         loading.querySelector('.bubble').textContent = data.response || data.error || 'No response received.';
+        if (data.workflowType && data.workflowSteps?.length) {
+          loading.querySelector('.bubble').textContent += `\n\nWorkflow: ${data.workflowType}\n` + data.workflowSteps.map((step, index) => `${index + 1}. ${step}`).join('\n');
+        }
+        renderWorkflowPlan(data.workflowPlan || []);
         lastAgentOutput = data;
         const elapsedSeconds = ((data.elapsedMs ?? (performance.now() - requestStartTime)) / 1000).toFixed(1);
         const estimatedCost = Number(data.estimatedCostUSD ?? 0);
@@ -814,6 +881,7 @@
     $('fileInput').addEventListener('change', e => handleFiles([...e.target.files]).catch(err => alert(err.message)));
     $('clearFilesBtn').addEventListener('click', () => { uploadedFiles = []; renderAttachedFiles(); });
     $('sendBtn').addEventListener('click', sendMessage);
+    $('planBtn').addEventListener('click', planWorkflow);
     $('clearChatBtn').addEventListener('click', () => { chat.innerHTML = ''; chat.appendChild(welcomeState); });
     $('newSessionBtn').addEventListener('click', () => setSession(`web-${Date.now()}`));
     $('refreshSessionsBtn').addEventListener('click', loadSessions);
@@ -821,6 +889,7 @@
     $('refreshReviewBtn').addEventListener('click', loadReviewQueue);
     $('refreshOutputsBtn').addEventListener('click', loadOutputs);
     $('resetProgressBtn').addEventListener('click', () => renderProgress());
+    $('clearPlanBtn').addEventListener('click', () => renderWorkflowPlan());
     $('saveSettingsBtn').addEventListener('click', saveSettings);
     $('downloadFormat').addEventListener('change', e => e.target.value && lastAgentOutput && saveOutput(e.target.value));
     $('sessionInput').addEventListener('change', e => setSession(e.target.value.trim()));
@@ -829,6 +898,7 @@
 
     renderSuggestions();
     renderProgress();
+    renderWorkflowPlan();
     resizePrompt();
     Promise.all([checkHealth(), loadSettings(), loadSessions(), loadUsage(), loadReviewQueue(), loadOutputs()]);
   </script>

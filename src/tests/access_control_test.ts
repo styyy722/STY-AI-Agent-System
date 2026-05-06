@@ -1,8 +1,24 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { checkModeAccess, checkFileAccess, checkCanExport, checkCanApproveReview } from "../tools/accessControl.js";
 
-// Use the default policy (no access_policy.json) for all tests
+// Use the default policy (no access_policy.json) for all tests.
+// We force this via the STY_FORCE_DEFAULT_POLICY env override so the suite
+// is hermetic: it doesn't matter what access_policy.json exists on the
+// developer's machine. Previously these tests silently passed (because
+// vitest wasn't picking the file up); now they run, so the assumption
+// must be made explicit.
 // Default: analyst level, all modes allowed, canExport=true, canApproveReviews=false
+
+const ORIGINAL_FORCE = process.env.STY_FORCE_DEFAULT_POLICY;
+
+beforeAll(() => {
+  process.env.STY_FORCE_DEFAULT_POLICY = "1";
+});
+
+afterAll(() => {
+  if (ORIGINAL_FORCE === undefined) delete process.env.STY_FORCE_DEFAULT_POLICY;
+  else process.env.STY_FORCE_DEFAULT_POLICY = ORIGINAL_FORCE;
+});
 
 describe("checkModeAccess", () => {
   it("allows finance mode by default", () => {

@@ -1,5 +1,7 @@
 import "dotenv/config";
 import type { LLMClient, LLMRequest, LLMResponse } from "./llmInterface.js";
+import { checkBudget } from "../tools/costTracker.js";
+import { BudgetExceededError } from "./claudeClient.js";
 
 const STANDARD_MODEL = "gpt-4o-mini";
 const PREMIUM_MODEL = "gpt-4o";
@@ -13,6 +15,13 @@ export class OpenAIClient implements LLMClient {
         "  1. Add OPENAI_API_KEY=sk-... to your .env file\n" +
         "  Get a key at: https://platform.openai.com/api-keys"
       );
+    }
+
+    // Honour the daily budget for the OpenAI provider too. Previously only
+    // the Claude client checked this, so LLM_PROVIDER=openai bypassed the cap.
+    const budget = checkBudget();
+    if (!budget.allowed) {
+      throw new BudgetExceededError(budget.spentUSD, budget.budgetUSD);
     }
 
     const model = request.usePremiumModel ? PREMIUM_MODEL : STANDARD_MODEL;

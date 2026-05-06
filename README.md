@@ -1,6 +1,6 @@
 # STY AI Agent System
 
-A terminal-based AI business agent for finance, data analytics, Power BI, reporting, and decision-ready business writing.
+A CLI and web-based AI business agent for finance, data analytics, Power BI, reporting, and decision-ready business writing.
 
 This repo is designed around one goal: **produce better business outputs faster, while keeping assumptions, risks, evidence, cost, and review controls visible.**
 
@@ -10,13 +10,13 @@ This repo is designed around one goal: **produce better business outputs faster,
 
 STY AI Agent System helps with:
 
-- **Finance workflows**: WACC, CAPM, cost of debt, cost of equity, valuation, financial ratios, scenario analysis, investment cases, stock analysis, and portfolio-style analysis.
-- **Data analytics workflows**: dataset overview, EDA, missing value checks, data quality audits, SQL review, feature engineering, model comparison, dashboards, metrics, and root-cause investigation.
-- **Power BI workflows**: DAX optimisation, semantic model review, star schema design, measure logic, dashboard layout, report visualisation, and Power BI best-practice review.
+- **Finance workflows**: WACC, CAPM, valuation, rolling forecasts, driver-based planning, variance bridges, working capital, cash flow, unit economics, pricing/margin analysis, covenant checks, stock analysis, and capital allocation.
+- **Data analytics workflows**: dataset overview, EDA, data observability, data contracts, anomaly detection, forecasting, experiments, causal inference, segmentation, churn, SQL review, schema mapping, metrics, and root-cause investigation.
+- **Power BI workflows**: DAX optimisation, finance measure libraries, financial reporting models, CFO dashboard trust review, semantic model review, calculation groups, incremental refresh, RLS/OLS, Power Query finance ETL, governance, ALM/deployment, audit monitoring, and report design.
 - **Reporting workflows**: executive summaries, board papers, business cases, financial performance reports, project status reports, risk reports, and slide-ready insights.
 - **Productivity workflows**: general business writing, structured analysis, action plans, reusable session context, and local output saving.
 
-The agent is not just a chat wrapper. It includes a CLI, skill registry, file ingestion, memory, RAG-style local knowledge indexing, optional web search, optional Python execution for data mode, cost tracking, confidence scoring, audit logs, access controls, and a review queue.
+The agent is not just a chat wrapper. It includes a CLI, web UI, skill registry, file and image ingestion, auto multi-mode workflow orchestration, memory, RAG-style local knowledge indexing, governed plugin tools, optional web search, optional Python execution for data mode, cost tracking, confidence scoring, audit logs, access controls, and a review queue.
 
 ---
 
@@ -47,6 +47,16 @@ npm run dev -- data \
   --file "data/unicef_dataset.csv" \
   --session unicef-eda \
   --output "outputs/unicef-eda-review.md"
+```
+
+For complex cross-functional tasks, use the `auto` workflow and let the agent decide which specialist modes to apply:
+
+```bash
+npm run dev -- ask \
+  "Review this CFO dashboard. Validate the Power BI design, data quality, metric definitions, finance logic, and produce an executive-ready action list." \
+  --file "dashboard-screenshot.png" \
+  --file "financials.xlsx" \
+  --workflow auto
 ```
 
 ---
@@ -126,6 +136,14 @@ Optional cost control:
 DAILY_BUDGET_USD=15.00
 ```
 
+Optional tool permission policy:
+
+```env
+# Comma-separated permissions available to auto-invoked tools.
+# Supported: context-read, network, filesystem-read, filesystem-write, code-execution, external-api
+TOOL_ALLOWED_PERMISSIONS=context-read,network,external-api,code-execution
+```
+
 ### 4. Verify setup
 
 ```bash
@@ -169,6 +187,7 @@ sty-agent hello
 | `finance` | WACC, valuation, investment analysis, ratios, stock/portfolio analysis | `npm run dev -- finance "Explain WACC and list required assumptions"` |
 | `data` | EDA, data quality, SQL, modelling, dashboards, metrics | `npm run dev -- data "Summarise this dataset" --file data.csv` |
 | `report` | Executive summaries, board papers, business cases, risk/status reports | `npm run dev -- report "Turn this analysis into a board-ready summary" --file analysis.md` |
+| `pbi` | Power BI, DAX, semantic models, report design, governance | `npm run dev -- pbi "Review this DAX measure"` |
 
 Use `--deep` when quality matters more than speed. It runs a multi-agent pipeline: **Planner → Analyst → Critic → Synthesiser**.
 
@@ -182,9 +201,43 @@ npm run dev -- report \
 
 ---
 
+## Workflow types
+
+Use `--workflow` when you want the agent to run through a specific orchestration pattern.
+
+| Workflow | What it does | When to use |
+|---|---|---|
+| `standard` | Single specialist pass in the selected mode | Fast answers and normal analysis |
+| `auto` | Detects multiple relevant modes, runs specialist passes, then synthesises one answer | Complex prompts spanning finance, data, Power BI, and reporting |
+| `routing` | Routes to one best specialist mode before answering | You are unsure which single mode to use |
+| `evaluator-optimizer` | Generates, scores, and rewrites if quality is below threshold | Higher-quality deliverables without full deep mode |
+| `human-approval` | Generates output and forces it into the review queue | Corporate or high-risk outputs requiring sign-off |
+| `long-running` | Iterates up to `--max-iterations` until completion or quality improves | Longer analytical tasks that benefit from repeated refinement |
+
+Examples:
+
+```bash
+npm run dev -- ask "Review this CFO dashboard for Power BI, data quality, and finance logic" \
+  --file dashboard.png \
+  --file financials.xlsx \
+  --workflow auto
+
+npm run dev -- finance "Build a rolling forecast and variance commentary" \
+  --file actuals.xlsx \
+  --workflow evaluator-optimizer
+
+npm run dev -- report "Draft this board paper and queue it for approval" \
+  --file analysis.md \
+  --workflow human-approval
+```
+
+`--deep` is separate from `--workflow`. Deep mode runs the multi-agent Planner → Analyst → Critic → Synthesiser pipeline. `--workflow auto` is better when one prompt needs multiple business modes in a single execution round.
+
+---
+
 ## Common command options
 
-The four main agent modes support these options:
+The main agent modes support these options:
 
 | Option | Purpose | Example |
 |---|---|---|
@@ -195,6 +248,10 @@ The four main agent modes support these options:
 | `-o, --output <path>` | Save the response locally. | `--output outputs/summary.md` |
 | `-s, --session <id>` | Continue a reusable conversation session. | `--session telstra-wacc` |
 | `--deep` | Use multi-agent quality review. | `--deep` |
+| `--workflow <type>` | Use a workflow: `auto`, `standard`, `routing`, `evaluator-optimizer`, `human-approval`, `long-running`. | `--workflow auto` |
+| `--dry-run-tools` | Preview relevant tool calls without side effects. | `--dry-run-tools` |
+| `--tool-permission <permission>` | Restrict which tool permissions are allowed for this run. Repeat or comma-separate. | `--tool-permission context-read,network` |
+| `--max-iterations <n>` | Maximum loop count for `long-running` workflow. | `--max-iterations 4` |
 
 ---
 
@@ -245,24 +302,26 @@ npm run dev -- report \
   --pattern "status"
 ```
 
-Folder ingestion skips common system folders such as `.git`, `node_modules`, `dist`, `logs`, `usage`, and `review_queue`.
+Folder ingestion skips common system folders such as `.git`, `node_modules`, `dist`, `logs`, `usage`, `review_queue`, `tool_audit`, `web_uploads`, and `web_outputs`.
 
 ### Important PDF/XLSX setup note
 
-`src/tools/fileReader.ts` expects extraction scripts in a folder named `scripts/`:
+`src/tools/fileReader.ts` looks for extraction scripts in either `scripts/` or `script/`:
 
 ```text
 scripts/extract_pdf.py
 scripts/extract_xlsx.py
+script/extract_pdf.py
+script/extract_xlsx.py
 ```
 
-If your repo currently has these files under `script/`, rename the folder to `scripts/` before using PDF or Excel ingestion.
+If PDF or Excel ingestion fails, check that one of those script locations exists and that Python 3 is available.
 
 ---
 
 ## Output saving
 
-Use `--output` to save the agent response:
+Use `--output` to save the CLI agent response:
 
 ```bash
 npm run dev -- report \
@@ -271,9 +330,7 @@ npm run dev -- report \
   --output "outputs/executive-summary.md"
 ```
 
-The CLI currently saves a markdown-formatted response using `saveAgentOutput()`.
-
-The codebase also includes `saveAgentOutputFile()` in `src/tools/outputWriter.ts`, with helper support for:
+CLI and web output saving use `saveAgentOutputFile()` in `src/tools/outputWriter.ts` and can generate:
 
 ```text
 .docx
@@ -284,13 +341,27 @@ The codebase also includes `saveAgentOutputFile()` in `src/tools/outputWriter.ts
 .txt
 ```
 
-However, the current CLI path calls `saveAgentOutput()` directly. If you want true Word, Excel, PDF, or notebook export from the CLI, update `src/cli.ts` to call `saveAgentOutputFile()` instead of `saveAgentOutput()` in the output-saving block.
-
-Until that change is wired in, prefer:
+Examples:
 
 ```bash
---output outputs/result.md
+npm run dev -- report "Write a CFO-ready summary" --file analysis.md --output outputs/summary.docx
+npm run dev -- data "Create a reproducible analysis note" --file dataset.csv --output outputs/analysis.ipynb
+npm run dev -- finance "Summarise this forecast" --file forecast.xlsx --output outputs/forecast-review.pdf
 ```
+
+Run the web UI with:
+
+```bash
+npm run web
+```
+
+Then open:
+
+```text
+http://localhost:3000
+```
+
+From the web UI, use the saved output/download controls to export Markdown, text, Word, Excel, PDF, or notebook files.
 
 ---
 
@@ -305,6 +376,7 @@ npm run dev -- skills --category finance
 npm run dev -- skills --category data
 npm run dev -- skills --category report
 npm run dev -- skills --category pbi
+npm run dev -- ask "Review this finance dashboard" --workflow auto
 npm run dev -- policy
 npm run dev -- usage
 npm run dev -- usage --week
@@ -367,6 +439,32 @@ npm run dev -- review reject <review-id> --by "Tiffany" --note "Needs better ass
 npm run dev -- review export <review-id> --output outputs/approved-output.md
 ```
 
+### Tool governance
+
+Plugin tools declare schemas, permissions, validation rules, and dry-run support. Each relevant, denied, invalid, successful, failed, or dry-run tool event is written to:
+
+```text
+tool_audit/
+```
+
+Use dry-run mode before allowing tools to make external calls or execute code:
+
+```bash
+npm run dev -- data \
+  "Analyse this dataset and write any Python needed, but do not run tools yet" \
+  --file dataset.csv \
+  --dry-run-tools
+```
+
+Restrict permissions for a single run:
+
+```bash
+npm run dev -- finance \
+  "Use current web context if allowed, then summarise market risk" \
+  --workflow auto \
+  --tool-permission context-read,network,external-api
+```
+
 ### Access policy
 
 Create a default policy file:
@@ -396,16 +494,18 @@ finance_skills/
 data_skills/
 report_skills/
 PBI_skills/
+general_skills/
 ```
 
 ### Current skill categories
 
 | Category | Folder | Examples |
 |---|---|---|
-| Finance | `finance_skills/` | financial analyst, WACC, DCF, investment advisor, stock analysis |
-| Data | `data_skills/` | EDA, cohort analysis, data quality, SQL review, metrics, schema mapping, visualisation |
-| Report | `report_skills/` | business case, data insights report, executive reporting, financial performance, project status, risk report |
-| Power BI | `PBI_skills/` | DAX optimisation, semantic modelling, model design review, visualisation designer |
+| Finance | `finance_skills/` | financial analyst, WACC, DCF, board finance quality review, investment advisor, stock analysis |
+| Data | `data_skills/` | EDA, cohort analysis, data quality, metric governance, observability, data contracts, anomaly detection, forecasting, SQL review |
+| Report | `report_skills/` | corporate decision memo, business case, data insights report, executive reporting, financial performance, project status, risk report |
+| Power BI | `PBI_skills/` | CFO dashboard trust review, DAX optimisation, finance measure libraries, financial reporting, semantic modelling, governance, ALM, RLS/OLS |
+| General | `general_skills/` | screenshot and photo analysis |
 
 ### Listing installed skills
 
@@ -501,10 +601,21 @@ npm run dev -- report \
 ### Power BI / DAX review
 
 ```bash
-npm run dev -- data \
+npm run dev -- pbi \
   "Review this Power BI DAX measure for correctness, filter context issues, performance, and readability. Explain the issue and provide a cleaner replacement measure." \
   --file "dax-measures.md" \
   --output "outputs/dax-review.md"
+```
+
+### Auto multi-mode review
+
+```bash
+npm run dev -- ask \
+  "Review this CFO dashboard. Validate Power BI design, data quality, metric definitions, finance logic, and produce a prioritised remediation plan." \
+  --file "dashboard.png" \
+  --file "financials.xlsx" \
+  --workflow auto \
+  --output "outputs/cfo-dashboard-review.md"
 ```
 
 ### Multi-document project brief workflow
@@ -527,6 +638,7 @@ npm run dev -- report \
 | `memory` | Stable preferences, reusable facts, recurring project context | Temporary details or sensitive data |
 | `rag` | Searchable local knowledge base from documents/notes | One-off attached files that are only needed once |
 | `--deep` | High-stakes, final, board-ready, technical, or complex outputs | Quick drafts or simple questions |
+| `--workflow auto` | Complex cross-functional prompts needing multiple specialist modes | Simple prompts where one mode is obvious |
 | `--output` | Saving outputs for review, sharing, or version control | Secret or sensitive content unless policy allows it |
 
 Recommended workflow for serious deliverables:
@@ -560,10 +672,12 @@ The system includes several quality mechanisms:
 |---|---|
 | Skill registry | Adds domain-specific instructions to improve structure and accuracy |
 | Multi-agent `--deep` mode | Adds planning, analysis, critique, and synthesis for stronger outputs |
+| Auto workflow | Detects relevant modes, runs specialist passes, and synthesises one final answer |
 | Confidence scoring | Scores factual grounding, assumptions, completeness, and domain risk |
 | Review queue | Holds outputs that need approval before export or use |
 | Cost tracking | Tracks estimated API usage against a daily budget |
 | Audit logs | Records command activity, model, duration, matched skills, confidence, and status |
+| Tool audit logs | Records tool relevance, permission denial, validation errors, dry-runs, success, and failure |
 | Access policy | Blocks sensitive file types, restricted paths, and classified filenames |
 | RAG | Reuses indexed local knowledge for more consistent project-specific outputs |
 | Memory | Recalls useful preferences and durable context across sessions |
@@ -584,6 +698,8 @@ A high-quality output should:
 
 - Use `ask`, `finance`, or `data` without `--deep` for quick drafts.
 - Use `report --deep` only for final or high-stakes outputs.
+- Use `--workflow auto` for complex prompts that naturally span finance, data, Power BI, and reporting.
+- Use `--dry-run-tools` when you want to preview tool usage before external calls or code execution.
 - Attach only the files needed for the task.
 - Use `--pattern` when reading folders to avoid irrelevant context.
 - Use `--session` to avoid repeatedly re-uploading or re-explaining the same project context.
@@ -648,25 +764,47 @@ npm run dev -- data \
 STY-AI-Agent-System/
 ├── .github/workflows/
 │   └── eval.yml
-├── finance_skills/
+├── finance_skills/         # Financial analysis, FP&A, valuation, cash, pricing, covenant, unit economics skills
 │   ├── finance/
 │   ├── financial-analyst/
+│   ├── driver_based_planning/
+│   ├── rolling_forecast/
+│   ├── variance_bridge/
+│   ├── working_capital_cashflow/
+│   ├── scenario_monte_carlo/
+│   ├── unit_economics/
+│   ├── pricing_margin_analysis/
+│   ├── close_reporting_pack/
+│   ├── covenant_credit_analysis/
+│   ├── three_statement_model/
 │   ├── investment_advisor/
 │   └── stock_analysis/
-├── data_skills/
+├── data_skills/            # EDA, quality, observability, forecasting, experiments, causal, lineage, and analytics skills
 │   ├── analysis_documentation/
+│   ├── anomaly_detection/
+│   ├── causal_inference/
+│   ├── churn_prediction/
 │   ├── cohort_analysis/
+│   ├── customer_segmentation/
 │   ├── dashboard_builder/
+│   ├── data_contracts/
+│   ├── data_lineage_impact/
+│   ├── data_observability/
 │   ├── data_quality_check/
 │   ├── eda/
+│   ├── experimentation_ab_testing/
 │   ├── exec_summary_generator/
+│   ├── forecasting_timeseries/
 │   ├── metric_reconciliation/
 │   ├── metrics_calculator/
 │   ├── query/
 │   ├── root_cause_investigation/
 │   ├── schema_mapper/
 │   ├── semantic_model_builder/
+│   ├── statistical_quality_control/
 │   └── visualisation_builder/
+├── general_skills/
+│   └── screenshot_photo_analysis/
 ├── report_skills/
 │   ├── business_case_report/
 │   ├── data_insight_report/
@@ -674,23 +812,34 @@ STY-AI-Agent-System/
 │   ├── financial_performance_report/
 │   ├── project_status_report/
 │   └── risk_report/
-├── PBI_skills/
+├── PBI_skills/             # Power BI modelling, financial reporting, DAX, governance, ALM, security, and audit skills
+│   ├── calculation_groups_time_intelligence/
+│   ├── copilot_model_readiness/
+│   ├── dax_finance_measure_library/
 │   ├── dax_optimisation/
+│   ├── incremental_refresh_performance/
 │   ├── model_design_review/
+│   ├── pbi_audit_monitoring/
+│   ├── pbi_financial_reporting/
 │   ├── pbi_general/
+│   ├── power_query_finance_etl/
+│   ├── powerbi_alm_deployment/
+│   ├── powerbi_governance_review/
+│   ├── rls_ols_security_design/
 │   ├── semantic_modelling/
 │   └── visualisation_designer/
 ├── plugins/
 │   ├── code-execution/
 │   └── web-search/
-├── script/                  # Rename to scripts/ for current PDF/XLSX reader compatibility
+├── script/                  # PDF/XLSX/RAG helper scripts; file reader also supports scripts/
 │   ├── embed.py
 │   ├── extract_pdf.py
 │   └── extract_xlsx.py
 ├── src/
 │   ├── agent/
 │   │   ├── coreAgent.ts
-│   │   └── multiAgent.ts
+│   │   ├── multiAgent.ts
+│   │   └── workflows.ts
 │   ├── llm/
 │   │   ├── claudeClient.ts
 │   │   ├── llmInterface.ts
@@ -709,7 +858,10 @@ STY-AI-Agent-System/
 │   │   ├── outputWriter.ts
 │   │   ├── ragStore.ts
 │   │   ├── reviewQueue.ts
-│   │   └── sessionMemory.ts
+│   │   ├── sessionMemory.ts
+│   │   ├── toolAudit.ts
+│   │   ├── toolInterface.ts
+│   │   └── toolRegistry.ts
 │   └── cli.ts
 ├── tests/
 │   ├── evalRunner.ts
@@ -777,18 +929,16 @@ Open `.env` and replace the placeholder with your actual API key.
 
 ### PDF or Excel files fail to load
 
-Check the script folder name. The reader expects:
+Check the script folder. The reader looks for:
 
 ```text
 scripts/extract_pdf.py
 scripts/extract_xlsx.py
+script/extract_pdf.py
+script/extract_xlsx.py
 ```
 
-If your repo has `script/`, rename it:
-
-```bash
-mv script scripts
-```
+Make sure Python 3 is installed and the helper scripts are present in one of those locations.
 
 ### Folder contains too many files
 
@@ -798,9 +948,9 @@ The folder reader has a built-in file limit. Use `--pattern` or attach specific 
 npm run dev -- report "Summarise forecast files" --folder docs --pattern forecast
 ```
 
-### Output saves but is not a real `.docx`, `.xlsx`, `.pdf`, or `.ipynb`
+### Output export fails
 
-The CLI currently writes markdown-formatted text via `saveAgentOutput()`. Wire `saveAgentOutputFile()` into `src/cli.ts` if you want true structured exports.
+Check that the target folder is writable and that the output extension is one of `.md`, `.txt`, `.docx`, `.xlsx`, `.pdf`, or `.ipynb`.
 
 ### Web search does not run
 
@@ -858,9 +1008,8 @@ Then edit `access_policy.json` to match your workplace or project requirements.
 - Skill matching is keyword-based, so unusual phrasing may miss a relevant skill.
 - PDF extraction is text-based and does not handle scanned/image-only PDFs well.
 - Excel extraction works best on clean, structured workbooks.
-- CLI output saving is currently markdown/text-first; true `.docx`, `.xlsx`, `.pdf`, and `.ipynb` generation needs the existing `saveAgentOutputFile()` helper to be wired into `cli.ts`.
-- The Power BI skill category exists, but there is no dedicated `pbi` command yet. Use `ask`, `data`, or `report` with Power BI/DAX wording.
 - `--deep` improves review quality but increases API calls and cost.
+- `--workflow auto` can run multiple specialist passes, so it may cost more than a single standard run.
 
 ---
 
@@ -868,9 +1017,7 @@ Then edit `access_policy.json` to match your workplace or project requirements.
 
 ### High priority
 
-- Rename `script/` to `scripts/`, or update `fileReader.ts` to look for the existing folder.
-- Wire `saveAgentOutputFile()` into `src/cli.ts` so `--output report.docx`, `--output model.ipynb`, `--output summary.pdf`, and `--output table.xlsx` generate true files.
-- Add a dedicated `pbi` command or update command help text to mention `--category pbi`.
+- Add eval cases for `--workflow auto`, Power BI finance reporting, image/screenshot analysis, and tool permission denial.
 - Add live CI eval option guarded by API secrets.
 
 ### Medium priority
@@ -880,13 +1027,14 @@ Then edit `access_policy.json` to match your workplace or project requirements.
 - Add export tests for `.docx`, `.xlsx`, `.pdf`, and `.ipynb`.
 - Add richer PDF parsing or OCR fallback for scanned PDFs.
 - Add a `--format` option for output style, such as `memo`, `board-paper`, `notebook`, or `slide-outline`.
+- Add an admin page for tool audit logs, workflow traces, and review queue operations.
 
 ### Future improvements
 
 - Better semantic skill matching beyond keyword detection.
 - Local vector embeddings for stronger RAG retrieval.
 - A dedicated notebook generation workflow.
-- A dedicated web UI for sessions, review queue, logs, and RAG documents.
+- Richer web UI pages for sessions, review queue, logs, tool audits, and RAG documents.
 - More granular model routing by task complexity and budget.
 
 ---

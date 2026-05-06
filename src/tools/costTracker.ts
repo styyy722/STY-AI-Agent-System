@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
+import { getCurrentUser } from "./accessControl.js";
 
 // Anthropic pricing as of mid-2025 (USD per million tokens)
 // These are estimates — actual billing is on Anthropic's invoice
@@ -90,12 +91,34 @@ export function getDailyBudgetUSD(): number {
   return isNaN(val) ? 5.00 : val; // default $5/day
 }
 
+/**
+ * Effective daily budget = the stricter of the env var DAILY_BUDGET_USD and
+ * the current user's policy maxDailyBudgetUSD. This means neither an admin
+ * (via env) nor a user (via policy) can quietly exceed the other's cap.
+ *
+ * If the access policy can't be loaded for any reason we fall back to the
+ * env-only budget so this never crashes the agent.
+ */
+export function getEffectiveDailyBudget(): number {
+  const envBudget = getDailyBudgetUSD();
+  let policyBudget = Number.POSITIVE_INFINITY;
+  try {
+    const user = getCurrentUser();
+    if (typeof user?.maxDailyBudgetUSD === "number" && user.maxDailyBudgetUSD > 0) {
+      policyBudget = user.maxDailyBudgetUSD;
+    }
+  } catch {
+    // No policy or policy load failure — use env only.
+  }
+  return Math.min(envBudget, policyBudget);
+}
+
 export function getDailySpend(date: string = todayStr()): number {
   return loadDayRecords(date).reduce((sum, r) => sum + r.estimatedCostUSD, 0);
 }
 
 export function checkBudget(): { allowed: boolean; spentUSD: number; budgetUSD: number; remainingUSD: number } {
-  const budgetUSD = getDailyBudgetUSD();
+  const budgetUSD = getEffectiveDailyBudget();
   const spentUSD = getDailySpend();
   const remainingUSD = Math.max(0, budgetUSD - spentUSD);
   return { allowed: spentUSD < budgetUSD, spentUSD, budgetUSD, remainingUSD };

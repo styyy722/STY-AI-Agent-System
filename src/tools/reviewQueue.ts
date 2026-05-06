@@ -19,9 +19,11 @@ export interface ReviewItem {
   reviewNote?: string;
 }
 
-// Modes and tiers that require mandatory review
+// Modes and tiers that require mandatory review.
+// "Unscored" is included as a safety net: if the scorer itself fails, finance
+// and report outputs still go to a human reviewer rather than slipping past.
 const REVIEW_REQUIRED_MODES = new Set(["finance", "report"]);
-const REVIEW_REQUIRED_TIERS = new Set(["Low", "Moderate"]);
+const REVIEW_REQUIRED_TIERS = new Set(["Low", "Moderate", "Unscored"]);
 
 function getQueueDir(): string {
   const projectQueue = path.join(process.cwd(), "review_queue");

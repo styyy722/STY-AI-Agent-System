@@ -2,8 +2,10 @@
 
 import { Command } from "commander";
 import path from "node:path";
-import { runCoreAgent, type AgentMode } from "./agent/coreAgent.js";
+import { type AgentMode } from "./agent/coreAgent.js";
 import { runMultiAgent } from "./agent/multiAgent.js";
+import { runAgentWorkflow, type WorkflowType } from "./agent/workflows.js";
+import type { ToolPermission } from "./tools/toolInterface.js";
 import {
   readBusinessFile,
   readMultipleFiles,
@@ -15,8 +17,7 @@ import {
   type ImageAttachment
 } from "./tools/fileReader.js";
 import {
-  saveAgentOutput,
-  formatSavedOutputContent
+  saveAgentOutputFile
 } from "./tools/outputWriter.js";
 import {
   getAvailableSkills,
@@ -87,10 +88,61 @@ interface CommandOptions {
   output?: string;
   session?: string;
   deep?: boolean;
+  workflow?: WorkflowType;
+  dryRunTools?: boolean;
+  toolPermission?: string[];
+  maxIterations?: string;
 }
 
 interface SkillsCommandOptions {
   category?: SkillCategory;
+}
+
+const VALID_WORKFLOWS = new Set<WorkflowType>([
+  "auto",
+  "standard",
+  "routing",
+  "evaluator-optimizer",
+  "human-approval",
+  "long-running"
+]);
+
+const VALID_TOOL_PERMISSIONS = new Set<ToolPermission>([
+  "context-read",
+  "network",
+  "filesystem-read",
+  "filesystem-write",
+  "code-execution",
+  "external-api"
+]);
+
+function parseWorkflow(value: WorkflowType | undefined): WorkflowType {
+  if (!value) return "standard";
+  if (!VALID_WORKFLOWS.has(value)) {
+    throw new Error(
+      `Invalid workflow "${value}". Use one of: ${Array.from(VALID_WORKFLOWS).join(", ")}`
+    );
+  }
+  return value;
+}
+
+function parseToolPermissions(values: string[] | undefined): ToolPermission[] | undefined {
+  if (!values || values.length === 0) return undefined;
+
+  const permissions = values
+    .flatMap(value => value.split(","))
+    .map(value => value.trim())
+    .filter(Boolean);
+
+  for (const permission of permissions) {
+    if (!VALID_TOOL_PERMISSIONS.has(permission as ToolPermission)) {
+      throw new Error(
+        `Invalid tool permission "${permission}". Use one of: ${Array.from(VALID_TOOL_PERMISSIONS).join(", ")}`
+      );
+    }
+  }
+
+  return permissions as ToolPermission[];
 }
 
 async function handleAgentCommand(
@@ -111,8 +163,9 @@ async function handleAgentCommand(
   const spinnerLabels: Record<string, string> = {
     general: "Thinking...",
     finance: "Running finance analysis...",
-    data: "Analysing data...",
-    report: "Drafting report..."
+    data:    "Analysing data...",
+    report:  "Drafting report...",
+    pbi:     "Running Power BI analysis..."
   };
 
   let finalUserInput = userInput;
@@ -212,8 +265,31 @@ async function handleAgentCommand(
   }
 
   const useDeep = options.deep ?? false;
+  let workflow: WorkflowType;
+  let permittedToolPermissions: ToolPermission[] | undefined;
+  let maxIterations: number | undefined;
+
+  try {
+    workflow = parseWorkflow(options.workflow);
+    permittedToolPermissions = parseToolPermissions(options.toolPermission);
+    maxIterations = options.maxIterations
+      ? Number.parseInt(options.maxIterations, 10)
+      : undefined;
+
+    if (options.maxIterations && (!Number.isFinite(maxIterations) || maxIterations! < 1)) {
+      throw new Error("--max-iterations must be a positive integer.");
+    }
+  } catch (error) {
+    console.error("");
+    console.error("Workflow/tool option error:");
+    console.error(error instanceof Error ? error.message : String(error));
+    console.error("");
+    process.exit(1);
+  }
   const spinnerLabel = useDeep
     ? "Running deep multi-agent analysis..."
+    : workflow !== "standard"
+      ? `Running ${workflow} workflow...`
     : spinnerLabels[mode] ?? "Thinking...";
   const spinner = ora(spinnerLabel).start();
 
@@ -251,11 +327,15 @@ async function handleAgentCommand(
         memoriesUsed: 0
       };
     } else {
-      response = await runCoreAgent({
+      response = await runAgentWorkflow({
         mode,
         userInput: finalUserInput,
         sessionId: options.session,
-        images: imageAttachments.length > 0 ? imageAttachments : undefined
+        images: imageAttachments.length > 0 ? imageAttachments : undefined,
+        workflowType: workflow,
+        dryRunTools: options.dryRunTools,
+        permittedToolPermissions,
+        maxIterations
       });
     }
     if (!useDeep) spinner.succeed("Done");
@@ -304,6 +384,14 @@ async function handleAgentCommand(
     });
   }
 
+  if (response.workflowType && response.workflowSteps?.length) {
+    console.log("");
+    console.log(`Workflow: ${response.workflowType}`);
+    response.workflowSteps.forEach((step: string, index: number) => {
+      console.log(`  ${index + 1}. ${step}`);
+    });
+  }
+
   if (response.confidenceBlock) {
     console.log(response.confidenceBlock);
   }
@@ -319,12 +407,12 @@ async function handleAgentCommand(
 
   if (options.output) {
     try {
-      const savedContent = formatSavedOutputContent(
-        response.title,
-        response.summary,
-        response.nextSteps
-      );
-      const savedFile = saveAgentOutput(options.output, savedContent);
+      const savedFile = await saveAgentOutputFile(options.output, {
+        title: response.title,
+        summary: response.summary,
+        nextSteps: response.nextSteps,
+        notebookCode: "# Add your follow-up analysis code here"
+      });
       console.log("");
       console.log(`Output saved to: ${savedFile.outputPath}`);
     } catch (error) {
@@ -597,6 +685,10 @@ program
   .option("-o, --output <path>", "Save the agent response to a file")
   .option("-s, --session <id>", "Session ID to maintain conversation history")
   .option("--deep", "Use multi-agent pipeline: Planner → Analyst → Critic → Synthesiser")
+  .option("--workflow <type>", "Workflow: auto, standard, routing, evaluator-optimizer, human-approval, long-running")
+  .option("--dry-run-tools", "Preview relevant tool calls without side effects")
+  .option("--tool-permission <permission>", "Allowed tool permission(s), comma-separated or repeated", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("--max-iterations <n>", "Maximum iterations for long-running workflow")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("general", request, options);
   });
@@ -612,6 +704,10 @@ program
   .option("-o, --output <path>", "Save the agent response to a file")
   .option("-s, --session <id>", "Session ID to maintain conversation history")
   .option("--deep", "Use multi-agent pipeline: Planner → Analyst → Critic → Synthesiser")
+  .option("--workflow <type>", "Workflow: auto, standard, routing, evaluator-optimizer, human-approval, long-running")
+  .option("--dry-run-tools", "Preview relevant tool calls without side effects")
+  .option("--tool-permission <permission>", "Allowed tool permission(s), comma-separated or repeated", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("--max-iterations <n>", "Maximum iterations for long-running workflow")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("finance", request, options);
   });
@@ -627,6 +723,10 @@ program
   .option("-o, --output <path>", "Save the agent response to a file")
   .option("-s, --session <id>", "Session ID to maintain conversation history")
   .option("--deep", "Use multi-agent pipeline: Planner → Analyst → Critic → Synthesiser")
+  .option("--workflow <type>", "Workflow: auto, standard, routing, evaluator-optimizer, human-approval, long-running")
+  .option("--dry-run-tools", "Preview relevant tool calls without side effects")
+  .option("--tool-permission <permission>", "Allowed tool permission(s), comma-separated or repeated", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("--max-iterations <n>", "Maximum iterations for long-running workflow")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("data", request, options);
   });
@@ -642,8 +742,31 @@ program
   .option("-o, --output <path>", "Save the agent response to a file")
   .option("-s, --session <id>", "Session ID to maintain conversation history")
   .option("--deep", "Use multi-agent pipeline: Planner → Analyst → Critic → Synthesiser")
+  .option("--workflow <type>", "Workflow: auto, standard, routing, evaluator-optimizer, human-approval, long-running")
+  .option("--dry-run-tools", "Preview relevant tool calls without side effects")
+  .option("--tool-permission <permission>", "Allowed tool permission(s), comma-separated or repeated", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("--max-iterations <n>", "Maximum iterations for long-running workflow")
   .action(async (request: string, options: CommandOptions) => {
     await handleAgentCommand("report", request, options);
+  });
+
+program
+  .command("pbi")
+  .description("Run Power BI workflows: DAX, semantic modelling, Power Query, and report design")
+  .argument("<request>", "Your Power BI request")
+  .option("-f, --file <path>", "Attach a file or image (repeat for multiple)", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("--folder <path>", "Read all supported files from a folder")
+  .option("-r, --recursive", "With --folder: also read files in subdirectories")
+  .option("--pattern <text>", "With --folder: only include files whose name contains this text")
+  .option("-o, --output <path>", "Save the agent response to a file")
+  .option("-s, --session <id>", "Session ID to maintain conversation history")
+  .option("--deep", "Use multi-agent pipeline: Planner → Analyst → Critic → Synthesiser")
+  .option("--workflow <type>", "Workflow: auto, standard, routing, evaluator-optimizer, human-approval, long-running")
+  .option("--dry-run-tools", "Preview relevant tool calls without side effects")
+  .option("--tool-permission <permission>", "Allowed tool permission(s), comma-separated or repeated", (v: string, prev: string[]) => [...(prev||[]), v], [] as string[])
+  .option("--max-iterations <n>", "Maximum iterations for long-running workflow")
+  .action(async (request: string, options: CommandOptions) => {
+    await handleAgentCommand("pbi", request, options);
   });
 
 // ── Review commands ───────────────────────────────────────────────────────────

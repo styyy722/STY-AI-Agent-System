@@ -5,9 +5,19 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 
-import { runCoreAgent, type AgentMode } from "../src/agent/coreAgent.js";
+import { type AgentMode } from "../src/agent/coreAgent.js";
 import { runMultiAgent } from "../src/agent/multiAgent.js";
-import { readBusinessFile } from "../src/tools/fileReader.js";
+import {
+  inferAutoModePlan,
+  runAgentWorkflow,
+  type WorkflowType
+} from "../src/agent/workflows.js";
+import {
+  isImageFile,
+  readBusinessFile,
+  readImageFile,
+  type ImageAttachment
+} from "../src/tools/fileReader.js";
 import { saveAgentOutputFile } from "../src/tools/outputWriter.js";
 import {
   initDb,
@@ -54,6 +64,8 @@ type WebSettings = {
   includeAssumptions: boolean;
   includeNextSteps: boolean;
   deepAnalysis: boolean;
+  workflowType: WorkflowType;
+  dryRunTools: boolean;
 };
 
 type UploadedFileContext = {
@@ -62,6 +74,7 @@ type UploadedFileContext = {
   extension?: string;
   content?: string;
   warning?: string;
+  image?: ImageAttachment;
 };
 
 const defaultSettings: WebSettings = {
@@ -70,7 +83,9 @@ const defaultSettings: WebSettings = {
   detailLevel: "balanced",
   includeAssumptions: true,
   includeNextSteps: true,
-  deepAnalysis: false
+  deepAnalysis: false,
+  workflowType: "auto",
+  dryRunTools: false
 };
 
 function safeFileName(fileName: string): string {
@@ -117,13 +132,15 @@ function buildAdvancedInstruction(settings: WebSettings): string {
     `- Preferred output format: ${settings.outputFormat || "Structured response"}`,
     `- Detail level: ${settings.detailLevel}`,
     `- Include assumptions: ${settings.includeAssumptions ? "yes" : "no"}`,
-    `- Include next steps: ${settings.includeNextSteps ? "yes" : "no"}`
+    `- Include next steps: ${settings.includeNextSteps ? "yes" : "no"}`,
+    `- Workflow type: ${settings.workflowType}`,
+    `- Tool dry run: ${settings.dryRunTools ? "yes" : "no"}`
   ].join("\n");
 }
 
 function buildUploadedFilePrompt(files: UploadedFileContext[] = []): string {
   const usableFiles = files.filter(
-    file => file.content && file.content.trim().length > 0
+    file => file.image || (file.content && file.content.trim().length > 0)
   );
 
   if (usableFiles.length === 0) {
@@ -136,6 +153,9 @@ function buildUploadedFilePrompt(files: UploadedFileContext[] = []): string {
       [
         `\n--- File ${index + 1}: ${file.fileName} ---`,
         file.warning ? `Warning: ${file.warning}` : "",
+        file.image
+          ? `Image attachment included for visual analysis (${file.image.mediaType}).`
+          : "",
         file.content,
         `--- End of ${file.fileName} ---`
       ]
@@ -143,6 +163,15 @@ function buildUploadedFilePrompt(files: UploadedFileContext[] = []): string {
         .join("\n")
     )
   ].join("\n");
+}
+
+function collectUploadedImages(files: UploadedFileContext[] = []): ImageAttachment[] {
+  return files
+    .filter(file => file.image?.base64 && file.image.mediaType)
+    .map(file => ({
+      ...file.image!,
+      fileName: file.image?.fileName ?? file.fileName
+    }));
 }
 
 function listSavedOutputs() {
@@ -247,9 +276,25 @@ app.post("/api/upload", (req, res) => {
       fs.writeFileSync(filePath, Buffer.from(dataBase64, "base64"));
 
       try {
-        const fileContext = readBusinessFile(filePath);
-        content = fileContext.content;
-        warning = fileContext.warning ?? "";
+        if (isImageFile(filePath)) {
+          const image = {
+            ...readImageFile(filePath),
+            fileName
+          };
+
+          return res.json({
+            id,
+            fileName,
+            extension,
+            content: `[Image attachment: ${fileName}. The agent can inspect this screenshot or photo directly.]`,
+            warning,
+            image
+          });
+        } else {
+          const fileContext = readBusinessFile(filePath);
+          content = fileContext.content;
+          warning = fileContext.warning ?? "";
+        }
       } catch (error) {
         warning =
           error instanceof Error
@@ -304,6 +349,7 @@ app.post("/api/ask", async (req, res) => {
 
     const filePrompt = buildUploadedFilePrompt(files ?? []);
     const advancedInstruction = buildAdvancedInstruction(resolvedSettings);
+    const images = collectUploadedImages(files ?? []);
 
     const finalPrompt = [
       `User request:\n${prompt}`,
@@ -317,7 +363,8 @@ app.post("/api/ask", async (req, res) => {
       const result = await runMultiAgent({
         mode: resolvedMode,
         userInput: finalPrompt,
-        sessionId
+        sessionId,
+        images: images.length > 0 ? images : undefined
       });
 
       if (sessionId) {
@@ -344,10 +391,13 @@ app.post("/api/ask", async (req, res) => {
       });
     }
 
-    const result = await runCoreAgent({
+    const result = await runAgentWorkflow({
       mode: resolvedMode,
       userInput: finalPrompt,
-      sessionId
+      sessionId,
+      images: images.length > 0 ? images : undefined,
+      workflowType: resolvedSettings.workflowType,
+      dryRunTools: resolvedSettings.dryRunTools
     });
 
     const usageAfter = getDailySummary();
@@ -368,6 +418,9 @@ app.post("/api/ask", async (req, res) => {
       toolsUsed: result.toolsUsed,
       codeExecuted: result.codeExecuted,
       memoriesUsed: result.memoriesUsed,
+      workflowType: result.workflowType,
+      workflowSteps: result.workflowSteps,
+      workflowPlan: result.workflowPlan,
       elapsedMs: Date.now() - requestStartedAt,
       estimatedCostUSD
     });
@@ -376,6 +429,48 @@ app.post("/api/ask", async (req, res) => {
 
     res.status(500).json({
       error: error.message || "Something went wrong"
+    });
+  }
+});
+
+app.post("/api/plan", (req, res) => {
+  try {
+    const { mode, prompt, files, settings } = req.body ?? {};
+
+    if (!prompt) {
+      return res.status(400).json({
+        error: "No prompt provided"
+      });
+    }
+
+    const validModes: AgentMode[] = ["general", "finance", "data", "report", "pbi"];
+    const resolvedMode: AgentMode = validModes.includes(mode)
+      ? mode
+      : "general";
+
+    const resolvedSettings = {
+      ...getSettings(),
+      ...(settings ?? {})
+    } as WebSettings;
+
+    const finalPrompt = [
+      `User request:\n${prompt}`,
+      buildUploadedFilePrompt(files ?? []),
+      buildAdvancedInstruction({
+        ...resolvedSettings,
+        workflowType: "auto"
+      })
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    res.json({
+      workflowType: "auto",
+      plan: inferAutoModePlan(finalPrompt, resolvedMode)
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: error.message || "Could not plan workflow"
     });
   }
 });
