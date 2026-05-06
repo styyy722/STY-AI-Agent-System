@@ -17,8 +17,7 @@ import {
   type ImageAttachment
 } from "./tools/fileReader.js";
 import {
-  saveAgentOutput,
-  formatSavedOutputContent
+  saveAgentOutputFile
 } from "./tools/outputWriter.js";
 import {
   getAvailableSkills,
@@ -408,12 +407,12 @@ async function handleAgentCommand(
 
   if (options.output) {
     try {
-      const savedContent = formatSavedOutputContent(
-        response.title,
-        response.summary,
-        response.nextSteps
-      );
-      const savedFile = saveAgentOutput(options.output, savedContent);
+      const savedFile = await saveAgentOutputFile(options.output, {
+        title: response.title,
+        summary: response.summary,
+        nextSteps: response.nextSteps,
+        notebookCode: "# Add your follow-up analysis code here"
+      });
       console.log("");
       console.log(`Output saved to: ${savedFile.outputPath}`);
     } catch (error) {

@@ -984,6 +984,8 @@ const EXTRA_KEYWORDS_BY_FOLDER: Record<string, string[]> = {
   ]
 };
 
+let skillsCache: AgentSkill[] | null = null;
+
 /**
  * Match a keyword inside the user input using word boundaries based on
  * non-alphanumeric characters. This lets multi-symbol tokens like "p/e",
@@ -1079,6 +1081,13 @@ function createKeywords(skill: AgentSkill, fallbackKeywords: string[]): string[]
 }
 
 export function getAvailableSkills(): AgentSkill[] {
+  if (skillsCache) {
+    return skillsCache.map(skill => ({
+      ...skill,
+      keywords: [...skill.keywords]
+    }));
+  }
+
   const skills: AgentSkill[] = [];
 
   for (const root of SKILL_ROOTS) {
@@ -1110,7 +1119,12 @@ export function getAvailableSkills(): AgentSkill[] {
     }
   }
 
-  return skills;
+  skillsCache = skills;
+
+  return skills.map(skill => ({
+    ...skill,
+    keywords: [...skill.keywords]
+  }));
 }
 
 export function findRelevantSkills(

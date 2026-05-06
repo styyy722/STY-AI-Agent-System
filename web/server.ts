@@ -7,7 +7,11 @@ import dotenv from "dotenv";
 
 import { type AgentMode } from "../src/agent/coreAgent.js";
 import { runMultiAgent } from "../src/agent/multiAgent.js";
-import { runAgentWorkflow, type WorkflowType } from "../src/agent/workflows.js";
+import {
+  inferAutoModePlan,
+  runAgentWorkflow,
+  type WorkflowType
+} from "../src/agent/workflows.js";
 import {
   isImageFile,
   readBusinessFile,
@@ -425,6 +429,48 @@ app.post("/api/ask", async (req, res) => {
 
     res.status(500).json({
       error: error.message || "Something went wrong"
+    });
+  }
+});
+
+app.post("/api/plan", (req, res) => {
+  try {
+    const { mode, prompt, files, settings } = req.body ?? {};
+
+    if (!prompt) {
+      return res.status(400).json({
+        error: "No prompt provided"
+      });
+    }
+
+    const validModes: AgentMode[] = ["general", "finance", "data", "report", "pbi"];
+    const resolvedMode: AgentMode = validModes.includes(mode)
+      ? mode
+      : "general";
+
+    const resolvedSettings = {
+      ...getSettings(),
+      ...(settings ?? {})
+    } as WebSettings;
+
+    const finalPrompt = [
+      `User request:\n${prompt}`,
+      buildUploadedFilePrompt(files ?? []),
+      buildAdvancedInstruction({
+        ...resolvedSettings,
+        workflowType: "auto"
+      })
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    res.json({
+      workflowType: "auto",
+      plan: inferAutoModePlan(finalPrompt, resolvedMode)
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      error: error.message || "Could not plan workflow"
     });
   }
 });

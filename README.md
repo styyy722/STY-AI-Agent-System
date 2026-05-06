@@ -330,9 +330,7 @@ npm run dev -- report \
   --output "outputs/executive-summary.md"
 ```
 
-The CLI currently saves a markdown-formatted response using `saveAgentOutput()`, so `.md` and `.txt` are the safest CLI output targets.
-
-The web UI uses `saveAgentOutputFile()` in `src/tools/outputWriter.ts` and can generate:
+CLI and web output saving use `saveAgentOutputFile()` in `src/tools/outputWriter.ts` and can generate:
 
 ```text
 .docx
@@ -341,6 +339,14 @@ The web UI uses `saveAgentOutputFile()` in `src/tools/outputWriter.ts` and can g
 .ipynb
 .md
 .txt
+```
+
+Examples:
+
+```bash
+npm run dev -- report "Write a CFO-ready summary" --file analysis.md --output outputs/summary.docx
+npm run dev -- data "Create a reproducible analysis note" --file dataset.csv --output outputs/analysis.ipynb
+npm run dev -- finance "Summarise this forecast" --file forecast.xlsx --output outputs/forecast-review.pdf
 ```
 
 Run the web UI with:
@@ -942,9 +948,9 @@ The folder reader has a built-in file limit. Use `--pattern` or attach specific 
 npm run dev -- report "Summarise forecast files" --folder docs --pattern forecast
 ```
 
-### Output saves but is not a real `.docx`, `.xlsx`, `.pdf`, or `.ipynb`
+### Output export fails
 
-The CLI currently writes markdown-formatted text via `saveAgentOutput()`. Use the web UI for true `.docx`, `.xlsx`, `.pdf`, and `.ipynb` exports, or wire `saveAgentOutputFile()` into `src/cli.ts` if you want true structured exports from CLI.
+Check that the target folder is writable and that the output extension is one of `.md`, `.txt`, `.docx`, `.xlsx`, `.pdf`, or `.ipynb`.
 
 ### Web search does not run
 
@@ -1002,7 +1008,6 @@ Then edit `access_policy.json` to match your workplace or project requirements.
 - Skill matching is keyword-based, so unusual phrasing may miss a relevant skill.
 - PDF extraction is text-based and does not handle scanned/image-only PDFs well.
 - Excel extraction works best on clean, structured workbooks.
-- CLI output saving is currently markdown/text-first. Use the web UI for true `.docx`, `.xlsx`, `.pdf`, and `.ipynb` generation.
 - `--deep` improves review quality but increases API calls and cost.
 - `--workflow auto` can run multiple specialist passes, so it may cost more than a single standard run.
 
@@ -1012,7 +1017,6 @@ Then edit `access_policy.json` to match your workplace or project requirements.
 
 ### High priority
 
-- Wire `saveAgentOutputFile()` into `src/cli.ts` so `--output report.docx`, `--output model.ipynb`, `--output summary.pdf`, and `--output table.xlsx` generate true files from CLI.
 - Add eval cases for `--workflow auto`, Power BI finance reporting, image/screenshot analysis, and tool permission denial.
 - Add live CI eval option guarded by API secrets.
 

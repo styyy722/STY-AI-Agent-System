@@ -380,6 +380,7 @@
             <span class="helper">Tip: pick a mode, select a session, upload files or images if needed, then ask for the exact output format.</span>
             <div class="row">
               <button class="btn" id="clearChatBtn" type="button">Clear chat</button>
+              <button class="btn" id="planBtn" type="button">Plan workflow</button>
               <button class="btn primary" id="sendBtn" type="button">Send message</button>
             </div>
           </div>
@@ -709,6 +710,37 @@
       window.location.href = data.downloadUrl;
     }
 
+    async function planWorkflow() {
+      const prompt = promptEl.value.trim();
+      if (!prompt) return alert('Enter a prompt first so the agent can plan the workflow.');
+
+      const planBtn = $('planBtn');
+      planBtn.disabled = true;
+      planBtn.textContent = 'Planning...';
+      renderProgress(0, -1);
+
+      try {
+        const data = await api('/api/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            mode: currentMode,
+            prompt,
+            files: uploadedFiles,
+            settings: getSettingsFromUi()
+          })
+        });
+        renderWorkflowPlan(data.plan || []);
+        renderProgress(-1, 0);
+      } catch (err) {
+        alert(err.message);
+        renderProgress();
+      }
+
+      planBtn.disabled = false;
+      planBtn.textContent = 'Plan workflow';
+    }
+
     function renderAttachedFiles() {
       const box = $('attachedFiles');
       box.innerHTML = '';
@@ -849,6 +881,7 @@
     $('fileInput').addEventListener('change', e => handleFiles([...e.target.files]).catch(err => alert(err.message)));
     $('clearFilesBtn').addEventListener('click', () => { uploadedFiles = []; renderAttachedFiles(); });
     $('sendBtn').addEventListener('click', sendMessage);
+    $('planBtn').addEventListener('click', planWorkflow);
     $('clearChatBtn').addEventListener('click', () => { chat.innerHTML = ''; chat.appendChild(welcomeState); });
     $('newSessionBtn').addEventListener('click', () => setSession(`web-${Date.now()}`));
     $('refreshSessionsBtn').addEventListener('click', loadSessions);
